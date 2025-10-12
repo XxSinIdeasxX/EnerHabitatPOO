@@ -114,7 +114,8 @@ def Tsa(
 def solveCS(
     constructive_system:list,
     Tsa_dataframe:pd.DataFrame,
-    AC = False
+    AC = False,
+    Energia=False
     )->pd.DataFrame:
     """
     Solves the constructive system's inside temperature with the Tsa simulation dataframe.
@@ -150,6 +151,7 @@ def solveCS(
     if AC:  # AC = True
         while C > 5e-4: 
             Told = T.copy()
+            print('calculo')
             for tiempo, datos in SC_dataframe.iterrows():
                 a,b,c,d = calculate_coefficients(dt, dx, k, Nx, rhoc, T, datos["Tsa"], ho, datos["Ti"], hi)
                 # Llamado de funcion para Acc
@@ -165,9 +167,14 @@ def solveCS(
     else:
         while C > 5e-4: 
             Told = T.copy()
+            ET = 0.
             for tiempo, datos in SC_dataframe.iterrows():
                 a,b,c,d = calculate_coefficients(dt, dx, k, Nx, rhoc, T, datos["Tsa"], ho, datos["Ti"], hi)
                 T, Ti = solve_PQ(a, b, c, d, T, Nx, datos['Ti'], hi, La, dt)
+                if (T[Nx-1] > Ti):
+                    ET += hi*(T[Nx-1]-Ti)*dt
+                    # print(tiempo,ET)
+
                 SC_dataframe.loc[tiempo,"Ti"] = Ti
             Tnew = T.copy()
             C = abs(Told - Tnew).mean()
@@ -175,5 +182,8 @@ def solveCS(
         #    FDsa = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Tsa.max()-SC_dataframe.Tsa.min())
 
         resultados = SC_dataframe['Ti']
-    
-    return resultados
+    if Energia:
+        return resultados, ET
+    else:
+        return resultados
+        
