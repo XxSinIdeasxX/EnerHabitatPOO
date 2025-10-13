@@ -7,6 +7,10 @@ import math
 from numba import njit
 from dateutil.parser import parse
 
+# Propiedades del aire empleadas en el modelo lumped-capacitance
+AIR_DENSITY = 1.1797660470258469
+AIR_HEAT_CAPACITY = 1005.458757
+
 """
 =============================
     Configuration tools
@@ -355,55 +359,103 @@ def set_k_rhoc(cs, nx):
 
     return k_array, rhoc_array, dx
 
-@njit
-def calculate_coefficients(dt, dx, k, nx, rhoc, T, To, ho, Ti, hi):
+def prepare_static_coefficients(k_array, rhoc_array, dx, dt, ho, hi):
     """
-    Calcula los coeficientes a, b, c y d para el sistema de ecuaciones.
+    Precompute mass and conductive coefficients that remain constant throughout the simulation.
 
-    Parameters:
-    dt (float): Paso temporal.
-    dx (float): Tamaño de cada volumen de control.
-    k (numpy.ndarray): Arreglo de conductividades.
-    nx (int): Número de elementos de discretización.
-    rhoc (numpy.ndarray): Arreglo del producto de densidad y calor específico.
-    T (numpy.ndarray): Arreglo de temperaturas.
-    To (float): Temperatura en el exterior.
-    ho (float): Coeficiente convectivo en el exterior.
-    Ti (float): Temperatura en el interior.
-    hi (float): Coeficiente convectivo en el interior.
+    Args:
+        k_array (numpy.ndarray): Conductividad térmica por nodo.
+        rhoc_array (numpy.ndarray): Producto densidad * calor específico por nodo.
+        dx (float): Tamaño del volumen de control.
+        dt (float): Paso de tiempo.
+        ho (float): Coeficiente convectivo exterior.
+        hi (float): Coeficiente convectivo interior.
 
     Returns:
-    tuple: (a, b, c, d) arreglos de coeficientes.
+        tuple: (mass_coeff, a_static, b_static, c_static) donde:
+            - mass_coeff (numpy.ndarray): Coeficientes de capacidad térmica por nodo.
+            - a_static (numpy.ndarray): Diagonal principal del sistema tridiagonal.
+            - b_static (numpy.ndarray): Diagonal superior del sistema tridiagonal.
+            - c_static (numpy.ndarray): Diagonal inferior del sistema tridiagonal.
     """
-    a = np.zeros(nx)
-    b = np.zeros(nx)
-    c = np.zeros(nx)
-    d = np.zeros(nx)
+    nx = k_array.shape[0]
+    mass_coeff = rhoc_array * (dx / dt)
 
-    # Calcular coeficientes en el primer nodo
-    b[0] = (2.0 * k[0] * k[1]) / (k[0] + k[1]) / dx
-    c[0] = 0.0
-    d[0] = rhoc[0] * dx / dt * T[0] + ho * To
-    a[0] = rhoc[0] * dx / dt + ho + b[0]
-    
-    # Calcular coeficientes en los nodos intermedios
-    for i in range(1, nx -1):
-        b[i] = (2.0 * k[i] * k[i + 1]) / (k[i] + k[i + 1]) / dx
-        c[i] = (2.0 * k[i - 1] * k[i]) / (k[i] + k[i - 1]) / dx
-        d[i] = rhoc[i] * dx / dt * T[i]
-        a[i] = rhoc[i] * dx / dt + b[i] + c[i]
-    
-    # Calcular coeficientes en el último nodo
-    i = nx - 1
-    b[i] = 0.0
-    c[i] = (2.0 * k[i - 1] * k[i]) / (k[i] + k[i - 1]) / dx
-    d[i] = rhoc[i] * dx / dt * T[i] + hi * Ti
-    a[i] = rhoc[i] * dx / dt + c[i] + hi
+    if nx <= 1:
+        a_static = np.empty(1, dtype=np.float64)
+        b_static = np.zeros(1, dtype=np.float64)
+        c_static = np.zeros(1, dtype=np.float64)
+        a_static[0] = mass_coeff[0] + ho + hi
+        return mass_coeff, a_static, b_static, c_static
 
-    return a, b, c, d
+    inv_dx = 1.0 / dx
+    interface_cond = np.empty(nx - 1, dtype=np.float64)
 
-@njit
-def solve_PQ(a, b, c, d, T, nx, Tint, hi, La, dt):
+    for i in range(nx - 1):
+        k_left = k_array[i]
+        k_right = k_array[i + 1]
+        interface_cond[i] = (2.0 * k_left * k_right) / (k_left + k_right) * inv_dx
+
+    a_static = np.empty(nx, dtype=np.float64)
+    b_static = np.empty(nx, dtype=np.float64)
+    c_static = np.empty(nx, dtype=np.float64)
+
+    cond_right = interface_cond[0]
+    mass0 = mass_coeff[0]
+    a_static[0] = mass0 + ho + cond_right
+    b_static[0] = cond_right
+    c_static[0] = 0.0
+
+    for i in range(1, nx - 1):
+        cond_left = interface_cond[i - 1]
+        cond_right = interface_cond[i]
+        mass_i = mass_coeff[i]
+
+        a_static[i] = mass_i + cond_left + cond_right
+        b_static[i] = cond_right
+        c_static[i] = cond_left
+
+    cond_left = interface_cond[nx - 2]
+    mass_last = mass_coeff[nx - 1]
+    a_static[nx - 1] = mass_last + cond_left + hi
+    b_static[nx - 1] = 0.0
+    c_static[nx - 1] = cond_left
+
+    return mass_coeff, a_static, b_static, c_static
+
+@njit(cache=True)
+def calculate_coefficients(mass_coeff, T, To, ho, Ti, hi, d):
+    """
+    Actualiza in-place el vector de términos independientes del sistema tridiagonal.
+
+    Parameters:
+        mass_coeff (numpy.ndarray): Coeficientes de capacidad térmica precomputados por nodo.
+        T (numpy.ndarray): Temperaturas actuales del dominio.
+        To (float): Temperatura en el exterior.
+        ho (float): Coeficiente convectivo exterior.
+        Ti (float): Temperatura en el interior.
+        hi (float): Coeficiente convectivo interior.
+        d (numpy.ndarray): Arreglo destino para la fuente térmica.
+    """
+    nx = mass_coeff.shape[0]
+
+    if nx == 1:
+        mass0 = mass_coeff[0]
+        d[0] = mass0 * T[0] + ho * To + hi * Ti
+        return
+
+    mass0 = mass_coeff[0]
+    d[0] = mass0 * T[0] + ho * To
+
+    for i in range(1, nx - 1):
+        mass_i = mass_coeff[i]
+        d[i] = mass_i * T[i]
+
+    mass_last = mass_coeff[nx - 1]
+    d[nx - 1] = mass_last * T[nx - 1] + hi * Ti
+
+@njit(cache=True)
+def solve_PQ(a, b, c, d, T, nx, Tint, capacitance_factor, P, Q, Tn):
     """
     Resuelve el sistema de ecuaciones usando el método TDMA y actualiza las temperaturas para el siguiente paso temporal.
 
@@ -415,46 +467,37 @@ def solve_PQ(a, b, c, d, T, nx, Tint, hi, La, dt):
         T (numpy.ndarray): Arreglo de temperaturas.
         nx (int): Número de elementos de discretización.
         Tint (float): Temperatura interna.
-        hi (float): Coeficiente convectivo interno.
-        rhoair (float): Densidad del aire.
-        cair (float): Calor específico del aire.
-        La (float): Parámetro adicional (longitud, área, etc.).
-        dt (float): Paso temporal.
+        capacitance_factor (float): Factor lumped-capacitance precomputado para el recinto.
+        P (numpy.ndarray): Arreglo auxiliar para la fase de forward sweep.
+        Q (numpy.ndarray): Arreglo auxiliar para la fase de forward sweep.
+        Tn (numpy.ndarray): Arreglo auxiliar para el back substitution.
 
     Returns:
-    tuple: (T, Tint, Qin, Tintaverage, Ein) arreglos de temperaturas y parámetros actualizados.
+        tuple: (T, Tint) con las temperaturas de muro actualizadas y la temperatura interior.
     """
-    
-    rhoair  = 1.1797660470258469
-    cair    = 1005.458757
-    P = np.zeros(nx)
-    Q = np.zeros(nx)
-    Tn = np.zeros(nx)
-    
+
     # Inicializar P y Q
-    P[0] = b[0] / a[0]
-    Q[0] = d[0] / a[0]
+    inv_a0 = 1.0 / a[0]
+    P[0] = b[0] * inv_a0
+    Q[0] = d[0] * inv_a0
 
     for i in range(1, nx):
-        P[i] = b[i] / (a[i] - c[i] * P[i - 1])
-        Q[i] = (d[i] + c[i] * Q[i - 1]) / (a[i] - c[i] * P[i - 1])
+        denom = a[i] - c[i] * P[i - 1]
+        inv_denom = 1.0 / denom
+        P[i] = b[i] * inv_denom
+        Q[i] = (d[i] + c[i] * Q[i - 1]) * inv_denom
 
     Tn[nx - 1] = Q[nx - 1]
     for i in range(nx - 2, -1, -1):
         Tn[i] = P[i] * Tn[i + 1] + Q[i]
 
-    T[:] = Tn
+    for i in range(nx):
+        T[i] = Tn[i]
 
-    # Actualizar Tint, Tintaverage, Qin y Ein
-    Tinn = Tint
-    Tint += hi * dt / (rhoair * cair * La) * (T[nx - 1] - Tinn)
+    Tint = Tint + capacitance_factor * (T[nx - 1] - Tint)
 
     return T, Tint
 
-def solve_PQ_AC(a, b, c, d, T, nx, Tint, hi, La, dt):
-    """Función para resolver PQ con A/C. Aún no implementada
-
-    Returns:
-        tuple: ( T, Tint, Qin, Tintaverage, Ein ) arreglos de temperaturas y parámetros actualizados.
-    """
-    return solve_PQ(a, b, c, d, T, nx, Tint, hi, La, dt)
+def solve_PQ_AC(a, b, c, d, T, nx, Tint, capacitance_factor, P, Q, Tn):
+    """Función placeholder para resolver PQ con A/C utilizando la misma lógica base."""
+    return solve_PQ(a, b, c, d, T, nx, Tint, capacitance_factor, P, Q, Tn)
