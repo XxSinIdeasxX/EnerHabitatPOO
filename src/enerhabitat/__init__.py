@@ -151,11 +151,15 @@ def solveCS(
     if AC:  # AC = True
         while C > 5e-4: 
             Told = T.copy()
-            print('calculo')
+            Qcool = Qheat = 0.
             for tiempo, datos in SC_dataframe.iterrows():
                 a,b,c,d = calculate_coefficients(dt, dx, k, Nx, rhoc, T, datos["Tsa"], ho, datos["Ti"], hi)
                 # Llamado de funcion para Acc
                 T, Ti = solve_PQ_AC(a, b, c, d, T, Nx, datos['Ti'], hi, La, dt)
+                if (T[Nx-1] > Ti):
+                    Qcool += hi*dt*(T[Nx-1]-Ti)
+                if (T[Nx-1] < Ti):
+                    Qheat += hi*dt*(Ti-T[Nx-1])
                 SC_dataframe.loc[tiempo,"Ti"] = Ti
             Tnew = T.copy()
             C = abs(Told - Tnew).mean()
@@ -163,6 +167,7 @@ def solveCS(
         #    FDsa = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Tsa.max()-SC_dataframe.Tsa.min())
 
         resultados = SC_dataframe['Ti']
+        return resultados,Qcool,Qheat
     
     else:
         while C > 5e-4: 
