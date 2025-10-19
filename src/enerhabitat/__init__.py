@@ -115,7 +115,7 @@ def solveCS(
     constructive_system:list,
     Tsa_dataframe:pd.DataFrame,
     AC = False,
-    Energia=False
+    energia=False
     )->pd.DataFrame:
     """
     Solves the constructive system's inside temperature with the Tsa simulation dataframe.
@@ -126,6 +126,8 @@ def solveCS(
         
     Returns:
         DataFrame: Interior temperature ( Ti ) for the constructive system.
+        Energy transfer ( ET ): if energia=True.
+        Qcool, Qheat: Cooling energy and heating energy values if AC=True.
     """
     
     global La     # Length of the dummy frame
@@ -159,29 +161,26 @@ def solveCS(
     
     C = 1
     ET = 0.0
-    solver = solve_PQ_AC if AC else solve_PQ
     
     if AC:  # AC = True
         while C > 5e-4: 
             Told = T.copy()
             Qcool = Qheat = 0.
-            for tiempo, datos in SC_dataframe.iterrows():
-                a,b,c,d = calculate_coefficients(dt, dx, k, Nx, rhoc, T, datos["Tsa"], ho, datos["Ti"], hi)
+            for idx in range(n_steps):
+                calculate_coefficients(mass_coeff, T, Tsa_vals[idx], ho, Ti_vals[idx], hi, d)
                 # Llamado de funcion para Acc
-                T, Ti = solve_PQ_AC(a, b, c, d, T, Nx, datos['Ti'], hi, La, dt)
+                T, Ti = solve_PQ_AC(a_static, b_static, c_static, d, T, Nx, Ti_vals[idx], hi, La, dt)
                 if (T[Nx-1] > Ti):
                     Qcool += hi*dt*(T[Nx-1]-Ti)
                 if (T[Nx-1] < Ti):
                     Qheat += hi*dt*(Ti-T[Nx-1])
-                SC_dataframe.loc[tiempo,"Ti"] = Ti
+                Ti_vals[idx] = Ti
             Tnew = T.copy()
             C = abs(Told - Tnew).mean()
-        #    FD   = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Ta.max()-SC_dataframe.Ta.min())
-        #    FDsa = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Tsa.max()-SC_dataframe.Tsa.min())
 
         SC_dataframe['Ti'] = Ti_vals
-        resultados = SC_dataframe['Ti']
-        return resultados,Qcool,Qheat
+        
+        return SC_dataframe['Ti'], Qcool, Qheat
     
     else:
         ET = 0.0
@@ -191,20 +190,18 @@ def solveCS(
             for idx in range(n_steps):
                 tint_prev = Ti_vals[idx]
                 calculate_coefficients(mass_coeff, T, Tsa_vals[idx], ho, tint_prev, hi, d)
-                T, tint_new = solver(a_static, b_static, c_static, d, T, Nx, tint_prev, capacitance_factor, P, Q, Tn_aux)
+                T, tint_new = solve_PQ(a_static, b_static, c_static, d, T, Nx, tint_prev, capacitance_factor, P, Q, Tn_aux)
                 Ti_new[idx] = tint_new
                 if T[Nx-1] > tint_new:
                     ET_iter += hi * (T[Nx - 1] - tint_new) * dt
             Ti_vals[:] = Ti_new
             C = np.abs(Told - T).mean()
             ET = ET_iter
-        #    FD   = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Ta.max()-SC_dataframe.Ta.min())
-        #    FDsa = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Tsa.max()-SC_dataframe.Tsa.min())
 
         SC_dataframe['Ti'] = Ti_vals
-        resultados = SC_dataframe['Ti']
-    if Energia:
-        return resultados, ET
-    else:
-        return resultados
+        
+        if energia: return SC_dataframe['Ti'], ET
+        else: return SC_dataframe['Ti']
+        
+        
         
