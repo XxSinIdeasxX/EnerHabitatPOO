@@ -140,13 +140,26 @@ def solveCS(
     
     cs = set_construction(propiedades, constructive_system)
     k, rhoc, dx = set_k_rhoc(cs, Nx)
+    mass_coeff, a_static, b_static, c_static = prepare_static_coefficients(k, rhoc, dx, dt, ho, hi)
+
+    d = np.empty(Nx)
+    P = np.empty(Nx)
+    Q = np.empty(Nx)
+    Tn_aux = np.empty(Nx)
+    capacitance_factor = hi * dt / (AIR_DENSITY * AIR_HEAT_CAPACITY * La)
 
     T = np.full(Nx, SC_dataframe.Tn.mean())
     SC_dataframe['Ti'] = SC_dataframe.Tn.mean()
     
     SC_dataframe = SC_dataframe.iloc[::dt]
+    Tsa_vals = SC_dataframe['Tsa'].to_numpy()
+    Ti_vals = SC_dataframe['Ti'].to_numpy()
+    Ti_new = np.empty_like(Ti_vals)
+    n_steps = Tsa_vals.shape[0]
     
     C = 1
+    ET = 0.0
+    solver = solve_PQ_AC if AC else solve_PQ
     
     if AC:  # AC = True
         while C > 5e-4: 
@@ -166,26 +179,29 @@ def solveCS(
         #    FD   = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Ta.max()-SC_dataframe.Ta.min())
         #    FDsa = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Tsa.max()-SC_dataframe.Tsa.min())
 
+        SC_dataframe['Ti'] = Ti_vals
         resultados = SC_dataframe['Ti']
         return resultados,Qcool,Qheat
     
     else:
+        ET = 0.0
         while C > 5e-4: 
             Told = T.copy()
-            ET = 0.
-            for tiempo, datos in SC_dataframe.iterrows():
-                a,b,c,d = calculate_coefficients(dt, dx, k, Nx, rhoc, T, datos["Tsa"], ho, datos["Ti"], hi)
-                T, Ti = solve_PQ(a, b, c, d, T, Nx, datos['Ti'], hi, La, dt)
-                if (T[Nx-1] > Ti):
-                    ET += hi*(T[Nx-1]-Ti)*dt
-                    # print(tiempo,ET)
-
-                SC_dataframe.loc[tiempo,"Ti"] = Ti
-            Tnew = T.copy()
-            C = abs(Told - Tnew).mean()
+            ET_iter = 0.
+            for idx in range(n_steps):
+                tint_prev = Ti_vals[idx]
+                calculate_coefficients(mass_coeff, T, Tsa_vals[idx], ho, tint_prev, hi, d)
+                T, tint_new = solver(a_static, b_static, c_static, d, T, Nx, tint_prev, capacitance_factor, P, Q, Tn_aux)
+                Ti_new[idx] = tint_new
+                if T[Nx-1] > tint_new:
+                    ET_iter += hi * (T[Nx - 1] - tint_new) * dt
+            Ti_vals[:] = Ti_new
+            C = np.abs(Told - T).mean()
+            ET = ET_iter
         #    FD   = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Ta.max()-SC_dataframe.Ta.min())
         #    FDsa = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Tsa.max()-SC_dataframe.Tsa.min())
 
+        SC_dataframe['Ti'] = Ti_vals
         resultados = SC_dataframe['Ti']
     if Energia:
         return resultados, ET
