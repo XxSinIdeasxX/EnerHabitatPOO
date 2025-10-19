@@ -498,6 +498,32 @@ def solve_PQ(a, b, c, d, T, nx, Tint, capacitance_factor, P, Q, Tn):
 
     return T, Tint
 
-def solve_PQ_AC(a, b, c, d, T, nx, Tint, capacitance_factor, P, Q, Tn):
-    """Función placeholder para resolver PQ con A/C utilizando la misma lógica base."""
-    return solve_PQ(a, b, c, d, T, nx, Tint, capacitance_factor, P, Q, Tn)
+def solve_PQ_AC(a, b, c, d, T, nx, Tint, hi, La, dt):
+    """Función para resolver PQ con A/C. Aún no implementada
+
+    Returns:
+        tuple: ( T, Tint, Qin, Tintaverage, Ein ) arreglos de temperaturas y parámetros actualizados.
+    """
+    
+    rhoair  = 1.1797660470258469
+    cair    = 1005.458757
+    P = np.zeros(nx)
+    Q = np.zeros(nx)
+    Tn = np.zeros(nx)
+    
+    # Inicializar P y Q
+    P[0] = b[0] / a[0]
+    Q[0] = d[0] / a[0]
+
+    for i in range(1, nx):
+        P[i] = b[i] / (a[i] - c[i] * P[i - 1])
+        Q[i] = (d[i] + c[i] * Q[i - 1]) / (a[i] - c[i] * P[i - 1])
+
+    Tn[nx - 1] = Q[nx - 1]
+    for i in range(nx - 2, -1, -1):
+        Tn[i] = P[i] * Tn[i + 1] + Q[i]
+
+    T[:] = Tn
+
+
+    return T, Tint

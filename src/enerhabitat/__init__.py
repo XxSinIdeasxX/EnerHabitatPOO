@@ -164,19 +164,24 @@ def solveCS(
     if AC:  # AC = True
         while C > 5e-4: 
             Told = T.copy()
-            print('calculo')
-            for idx in range(n_steps):
-                tint_prev = Ti_vals[idx]
-                calculate_coefficients(mass_coeff, T, Tsa_vals[idx], ho, tint_prev, hi, d)
-                T, tint_new = solver(a_static, b_static, c_static, d, T, Nx, tint_prev, capacitance_factor, P, Q, Tn_aux)
-                Ti_new[idx] = tint_new
-            Ti_vals[:] = Ti_new
-            C = np.abs(Told - T).mean()
+            Qcool = Qheat = 0.
+            for tiempo, datos in SC_dataframe.iterrows():
+                a,b,c,d = calculate_coefficients(dt, dx, k, Nx, rhoc, T, datos["Tsa"], ho, datos["Ti"], hi)
+                # Llamado de funcion para Acc
+                T, Ti = solve_PQ_AC(a, b, c, d, T, Nx, datos['Ti'], hi, La, dt)
+                if (T[Nx-1] > Ti):
+                    Qcool += hi*dt*(T[Nx-1]-Ti)
+                if (T[Nx-1] < Ti):
+                    Qheat += hi*dt*(Ti-T[Nx-1])
+                SC_dataframe.loc[tiempo,"Ti"] = Ti
+            Tnew = T.copy()
+            C = abs(Told - Tnew).mean()
         #    FD   = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Ta.max()-SC_dataframe.Ta.min())
         #    FDsa = (SC_dataframe.Ti.max() - SC_dataframe.Ti.min())/(SC_dataframe.Tsa.max()-SC_dataframe.Tsa.min())
 
         SC_dataframe['Ti'] = Ti_vals
         resultados = SC_dataframe['Ti']
+        return resultados,Qcool,Qheat
     
     else:
         ET = 0.0
