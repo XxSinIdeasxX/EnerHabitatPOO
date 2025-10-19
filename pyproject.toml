@@ -7,7 +7,7 @@ authors = [
 ]
 description = "Paquete instalable para EnerHabitat"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Intended Audience :: Education",
     "Intended Audience :: Science/Research",
@@ -26,13 +26,13 @@ classifiers = [
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
 dependencies = [
-    "numba>=0.60.0",
-    "pvlib>=0.12.0",
+    "numba>=0.62.1",
+    "pvlib>=0.13.1",
 ]
 
 [project.urls]
-Homepage = "https://github.com/AltamarMx/eh_development"
-Issues = "https://github.com/AltamarMx/eh_development"
+Homepage = "https://github.com/AltamarMx/EnerHabitat"
+Issues = "https://github.com/AltamarMx/EnerHabitat"
 
 [build-system]
 requires = ["hatchling"]
