@@ -7,18 +7,15 @@ import math
 from numba import njit
 from dateutil.parser import parse
 
-# Propiedades del aire empleadas en el modelo lumped-capacitance
-AIR_DENSITY = 1.1797660470258469
-AIR_HEAT_CAPACITY = 1005.458757
+_eh_config = "materials.ini"    # Default configuration file path
 
 """
 =============================
     Configuration tools
 =============================
 """
-_eh_config = "materials.ini"    # Default configuration file path
 
-def materials(new_config_file=None):
+def materials_file(new_config_file=None):
     """
     Returns the path to the configuration file. If "new_config_file" is defined,
     it modifies the established path. 
@@ -48,7 +45,7 @@ def materials(new_config_file=None):
     finally:
         return _eh_config      
 
-def get_list_materials():
+def materials_list():
     """
     Returns the list of materials contained in the configuration file
 
@@ -56,19 +53,19 @@ def get_list_materials():
         list: List of materials in the configuration file
     """
     config = configparser.ConfigParser()
-    config.read(materials())
+    config.read(materials_file())
     materiales = config.sections()
     return materiales
 
-def read_materials():
+def materials_dict():
     """
-    returns a dictionary with the list of materials and their properties
+    Returns a dictionary with the list of materials and their properties
 
     Returns:
         dict: _description_
     """
     data = configparser.ConfigParser()
-    data.read(materials())
+    data.read(materials_file())
 
     class Material:
         def __init__(self, k, rho, c):
