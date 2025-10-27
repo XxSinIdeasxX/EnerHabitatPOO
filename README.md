@@ -120,7 +120,7 @@ rho = 1500
 c   = 1480
 ```
 
-To set a configuration file, use the `materials()` function and specify the `path`
+To set a configuration file, use the `materials_file()` function and specify the `path`
 
 ```python
 eh.materials("./config/new_materials.ini")
