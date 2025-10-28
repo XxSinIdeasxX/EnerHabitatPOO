@@ -3,7 +3,16 @@ import pytz
 
 from datetime import datetime
 from .ehtools import *
-from .__init__ import ho, hi, dt, La, Nx, AIR_DENSITY, AIR_HEAT_CAPACITY
+
+La = 2.5    # Length of the dummy frame
+Nx = 200    # Number of elements to discretize
+ho = 13     # Outside convection heat transfer
+hi = 8.6    # Inside convection heat transfer
+dt = 600    # Time step in seconds
+
+# Propiedades del aire empleadas en el modelo lumped-capacitance
+AIR_DENSITY = 1.1797660470258469
+AIR_HEAT_CAPACITY = 1005.458757
 
 def meanDay(
     epw_file : str,
@@ -116,13 +125,13 @@ def solveCS(
     Solves the constructive system's inside temperature with the Tsa simulation dataframe.
 
     Args:
-        constructive_system (list): list of tuples from outside to inside with material and width.
+        constructive_system (list): List of tuples from outside to inside with material and width.
         Tsa_dataframe (DataFrame): Predicted sun-air temperature ( Tsa ) per second for the average day DataFrame.
         
     Returns:
-        DataFrame: Interior temperature ( Ti ) for the constructive system.
-        Energy transfer ( ET ): if energia=True.
-        Qcool, Qheat: Cooling energy and heating energy values if AC=True.
+        Ti (DataFrame): Interior temperature for the constructive system.
+        ET (float): Energy transfer if energia=True.
+        Qcool, Qheat (float): Cooling energy and heating energy values if AC=True.
     """
     
     global La     # Length of the dummy frame
@@ -130,6 +139,9 @@ def solveCS(
     global ho     # Outside convection heat transfer
     global hi     # Inside convection heat transfer
     global dt     # Time step
+
+    global AIR_DENSITY
+    global AIR_HEAT_CAPACITY
 
     SC_dataframe = Tsa_dataframe.copy()
        
