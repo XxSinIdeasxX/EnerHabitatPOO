@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import configparser
-import warnings
 import os
 import math
 from numba import njit
@@ -184,102 +183,6 @@ def get_sunrise_sunset_times(df):
     Hi = sunset_time.hour + sunset_time.minute / 60
     
     return Ho, Hi
-
-def readEPW(file,year=None,alias=False,warns=True):
-    """
-    Read EPW file 
-
-    Args:
-        file : path location of EPW file
-        year : None default to leave intact the year or change if desired. It raises a warning.
-        alias : False default, True to change to To, Ig, Ib, Ws, RH, ...
-    
-    Return:
-        tuple: 
-            epw - DataFrame
-            latitud - float
-            longitud - float
-            altitud - float
-            timezone - int
-    """
-    
-    datos=[]
-    with open(file,'r') as epw:
-        datos=epw.readline().split(',')
-    lat = float(datos[6])
-    lon = float(datos[7])
-    alt = float(datos[9])
-    tmz = int(datos[8].split('.')[0])
-    
-    names = ['Year',
-             'Month',
-             'Day',
-             'Hour',
-             'Minute',
-             'Data Source and Uncertainty Flags',
-             'Dry Bulb Temperature',
-             'Dew Point Temperature',
-             'Relative Humidity',
-             'Atmospheric Station Pressure',
-             'Extraterrestrial Horizontal Radiation',
-             'Extraterrestrial Direct Normal Radiation',
-             'Horizontal Infrared Radiation Intensity',
-             'Global Horizontal Radiation',
-             'Direct Normal Radiation',
-             'Diffuse Horizontal Radiation',
-             'Global Horizontal Illuminance',
-             'Direct Normal Illuminance',
-             'Diffuse Horizontal Illuminance',
-             'Zenith Luminance',
-             'Wind Direction',
-             'Wind Speed',
-             'Total Sky Cover',
-             'Opaque Sky Cover',
-             'Visibility',
-             'Ceiling Height',
-             'Present Weather Observation',
-             'Present Weather Codes',
-             'Precipitable Water',
-             'Aerosol Optical Depth',
-             'Snow Depth',
-             'Days Since Last Snowfall',
-             'Albedo',
-             'Liquid Precipitation Depth',
-             'Liquid Precipitation Quantity']
-       
-    rename = {'Dry Bulb Temperature'       :'To',
-             'Relative Humidity'           :'RH',
-             'Atmospheric Station Pressure':'P' ,
-             'Global Horizontal Radiation' :'Ig',
-             'Direct Normal Radiation'     :'Ib',
-             'Diffuse Horizontal Radiation':'Id',
-             'Wind Direction'              :'Wd',
-             'Wind Speed'                  :'Ws'}
-    
-    data = pd.read_csv(file,skiprows=8,header=None,names=names,usecols=range(35))
-    data.Hour = data.Hour -1
-    if year != None:
-        data.Year = year
-        if warns == True:
-            warnings.warn("Year has been changed, be carefull")
-    try:
-        data['tiempo'] = data.Year.astype('str') + '-' + data.Month.astype('str')  + '-' + data.Day.astype('str') + ' ' + data.Hour.astype('str') + ':' + data.Minute.astype('str') 
-        data.tiempo = pd.to_datetime(data.tiempo,format='%Y-%m-%d %H:%M')
-    except:
-        data.Minute = 0
-        data['tiempo'] = data.Year.astype('str') + '-' + data.Month.astype('str')  + '-' + data.Day.astype('str') + ' ' + data.Hour.astype('str') + ':' + data.Minute.astype('str') 
-        data.tiempo = pd.to_datetime(data.tiempo,format='%Y-%m-%d %H:%M')
-
-    data.set_index('tiempo',inplace=True)
-    del data['Year']
-    del data['Month']
-    del data['Day']
-    del data['Hour']
-    del data['Minute']
-    if alias:
-        data.rename(columns=rename,inplace=True)
-    return data, lat, lon, alt, tmz
-
 
 """
 =============================
