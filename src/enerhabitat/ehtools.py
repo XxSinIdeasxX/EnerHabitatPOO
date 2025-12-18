@@ -41,8 +41,8 @@ def materials_file(new_config_file=None):
         
     except FileNotFoundError:
         print(f"Error: {target_file} not found")
-    finally:
-        return _eh_config      
+
+    return _eh_config      
 
 def materials_list():
     """
