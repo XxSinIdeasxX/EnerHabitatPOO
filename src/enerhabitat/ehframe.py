@@ -191,17 +191,50 @@ class Location:
         return data
     
 class System:
-    def __init__(self, location:Location):
-        self.location = location
+    """_summary_
+
+    Attributes:
+        _type_: _description_
         
+    Methods:
+        _method_(self, args): _description_
+    """
+    
+    def __init__(self, location:Location, tilt = 90, azimuth = 0, absortance = 0.8):
+        self.tilt = tilt
+        self.azimuth = azimuth
+        self.absortance = absortance
+        self.location = location
+    
     @property
     def location(self):
         return self.__inst_location
-    
     @location.setter
     def location(self, loc:Location):
         """
         Location object containing climate data.
         """
         self.__inst_location = loc
+        self._updated = True
 
+    @property
+    def tilt(self):
+        return self.__tilt
+    @tilt.setter
+    def tilt(self, angle:float):
+        """
+        Tilt angle of the surface in degrees.
+        """
+        self.__tilt = angle
+        self.__updated = True
+        
+    @property
+    def azimuth(self):
+        return self.__azimuth
+    @azimuth.setter
+    def azimuth(self, angle:float):
+        """
+        Azimuth angle of the surface in degrees.
+        """
+        self.__azimuth = angle
+        self.__updated = True
