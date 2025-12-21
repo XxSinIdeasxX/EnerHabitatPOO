@@ -215,7 +215,7 @@ class System:
         Location object containing climate data.
         """
         self.__inst_location = loc
-        self._updated = True
+        self.__updated = True
 
     @property
     def tilt(self):
