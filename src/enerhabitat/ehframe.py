@@ -247,9 +247,10 @@ class System:
         print(f"Tilt: {self.tilt}°")
         print(f"Azimuth: {self.azimuth}°")
         print(f"Absortance: {self.absortance}")
-        print("Layers:")
-        for i, (material, width) in enumerate(self.layers):
-            print(f"  Layer {i+1}: {material}, {width} m")
+        if len(self.layers) != 0:
+            print("Layers:")
+            for i, (material, width) in enumerate(self.layers):
+                print(f"\t{i+1}: {material}, {width} m")
     
     @property
     def layers(self):
@@ -280,7 +281,7 @@ class System:
         Removes a layer from the constructive system by index.
 
         Args:
-            index (int): Index of the layer to remove.
+            index (int): Positive index of the layer to remove.
         """
         if index < 0 or index >= len(self.__capas):
             raise IndexError("Layer index out of range.")
@@ -384,7 +385,7 @@ class System:
                         )
 
         if recalculate:    
-            self.__solve_dataframe, self.__solve_energy = self.__calc_solve(energia=True)
+            self.__solve_dataframe, self.__solve_energy = self.__calc_solve(AC=False)
             self.__updated = False
         if energy:
             return self.__solve_dataframe, self.__solve_energy
@@ -543,7 +544,7 @@ class System:
         self.__updated = True
 
     @classmethod
-    def set_solver(cls, *,
+    def _set_solver(cls, *,
                    La=None, Nx=None, ho=None, hi=None, dt=None,
                    air_density=None, air_heat_capacity=None):
         if La is not None: cls.__La = La
@@ -556,7 +557,7 @@ class System:
         cls.__solver_version += 1
 
     @classmethod
-    def solver_info(cls):
+    def _solver_info(cls):
         print(f"La: {cls.__La}")
         print(f"Nx: {cls.__Nx}")
         print(f"ho: {cls.__ho}")
