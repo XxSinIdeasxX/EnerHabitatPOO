@@ -30,6 +30,7 @@ class Location:
         """
         Prints Location information.
         """
+        print("<class 'enerhabitat.Location'>")
         print(f'City: {self.city}')
         print(f'Timezone: {self.timezone}')
         print(f'Latitude: {self.latitude}°')
@@ -205,23 +206,24 @@ class System:
         Tsa(absortance, tilt, azimuth): Calculates the sun-air temperature per second for the average day experienced by a surface.
         solve(energy): Solves the constructive system's inside temperature.
         solveAC(): Solves the constructive system's required cooling and heating energy to maintain the inside temperature.
-        
+    """
+    """
         add_layer(material, width): Adds a layer to the constructive system.
         remove_layer(index): Removes a layer from the constructive system by index.
         
         set_solver(...): Class method to set solver parameters.
         solver_info(): Class method to print current solver parameters.
-        """
+    """
     
-    La = 2.5    # Length of the dummy frame
-    Nx = 200    # Number of elements to discretize
-    ho = 13     # Outside convection heat transfer
-    hi = 8.6    # Inside convection heat transfer
-    dt = 600    # Time step in seconds
+    __La = 2.5    # Length of the dummy frame
+    __Nx = 200    # Number of elements to discretize
+    __ho = 13     # Outside convection heat transfer
+    __hi = 8.6    # Inside convection heat transfer
+    __dt = 600    # Time step in seconds
 
     # Propiedades del aire empleadas en el modelo lumped-capacitance
-    AIR_DENSITY = 1.1797660470258469
-    AIR_HEAT_CAPACITY = 1005.458757
+    __AIR_DENSITY = 1.1797660470258469
+    __AIR_HEAT_CAPACITY = 1005.458757
     
     __solver_version = 0
 
@@ -419,7 +421,7 @@ class System:
         tilt = self.tilt
         azimuth = self.azimuth
         
-        outside_convection_heat_transfer = self.__class__.ho
+        outside_convection_heat_transfer = self.__class__.__ho
 
         if tilt == 0:
             LWR = 3.9
@@ -461,13 +463,13 @@ class System:
         """
         cls = self.__class__
         
-        La = cls.La # Length of the dummy frame
-        Nx = cls.Nx # Number of elements to discretize
-        ho = cls.ho # Outside convection heat transfer
-        hi = cls.hi # Inside convection heat transfer
-        dt = cls.dt # Time step
-        AIR_DENSITY = cls.AIR_DENSITY
-        AIR_HEAT_CAPACITY = cls.AIR_HEAT_CAPACITY
+        La = cls.__La # Length of the dummy frame
+        Nx = cls.__Nx # Number of elements to discretize
+        ho = cls.__ho # Outside convection heat transfer
+        hi = cls.__hi # Inside convection heat transfer
+        dt = cls.__dt # Time step
+        AIR_DENSITY = cls.__AIR_DENSITY
+        AIR_HEAT_CAPACITY = cls.__AIR_HEAT_CAPACITY
 
         SC_dataframe = self.Tsa().copy()
         constructive_system = self.layers
@@ -544,22 +546,22 @@ class System:
     def set_solver(cls, *,
                    La=None, Nx=None, ho=None, hi=None, dt=None,
                    air_density=None, air_heat_capacity=None):
-        if La is not None: cls.La = La
-        if Nx is not None: cls.Nx = Nx
-        if ho is not None: cls.ho = ho
-        if hi is not None: cls.hi = hi
-        if dt is not None: cls.dt = dt
-        if air_density is not None: cls.AIR_DENSITY = air_density
-        if air_heat_capacity is not None: cls.AIR_HEAT_CAPACITY = air_heat_capacity
+        if La is not None: cls.__La = La
+        if Nx is not None: cls.__Nx = Nx
+        if ho is not None: cls.__ho = ho
+        if hi is not None: cls.__hi = hi
+        if dt is not None: cls.__dt = dt
+        if air_density is not None: cls.__AIR_DENSITY = air_density
+        if air_heat_capacity is not None: cls.__AIR_HEAT_CAPACITY = air_heat_capacity
         cls.__solver_version += 1
 
     @classmethod
     def solver_info(cls):
-        print(f"La: {cls.La}")
-        print(f"Nx: {cls.Nx}")
-        print(f"ho: {cls.ho}")
-        print(f"hi: {cls.hi}")
-        print(f"dt: {cls.dt}")
-        print(f"AIR_DENSITY: {cls.AIR_DENSITY}")
-        print(f"AIR_HEAT_CAPACITY: {cls.AIR_HEAT_CAPACITY}")
+        print(f"La: {cls.__La}")
+        print(f"Nx: {cls.__Nx}")
+        print(f"ho: {cls.__ho}")
+        print(f"hi: {cls.__hi}")
+        print(f"dt: {cls.__dt}")
+        print(f"AIR_DENSITY: {cls.__AIR_DENSITY}")
+        print(f"AIR_HEAT_CAPACITY: {cls.__AIR_HEAT_CAPACITY}")
     
