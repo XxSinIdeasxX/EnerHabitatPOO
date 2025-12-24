@@ -26,6 +26,17 @@ class Location:
     def __init__(self, epw_file:str):
         self.epw = epw_file
         
+    def info(self):
+        """
+        Prints Location information.
+        """
+        print(f'City: {self.city}')
+        print(f'Timezone: {self.timezone}')
+        print(f'Latitude: {self.latitude}°')
+        print(f'Longitude: {self.longitude}°')
+        print(f'Altitude: {self.altitude} m')
+        print(f'File: {self.epw}')
+        
     @property
     def epw(self):
         return self.__epw_path
@@ -101,17 +112,6 @@ class Location:
 
         return dia_promedio
     
-    def info(self):
-        """
-        Prints Location information.
-        """
-        print(f'City: {self.city}')
-        print(f'Timezone: {self.timezone}')
-        print(f'Latitude: {self.latitude}°')
-        print(f'Longitude: {self.longitude}°')
-        print(f'Altitude: {self.altitude} m')
-        print(f'File: {self.epw}')
-        
     def __epw_format_data(self, year = None, warns = False, alias = True):
         """
         Reads Location's EPW file and returns a formatted DataFrame.
@@ -191,16 +191,100 @@ class Location:
         return data
     
 class System:
-
+    """
+    System class to model a constructive system and calculate its interior temperature
+    based on the sun-air temperature experienced by the surface.
+    Attributes:
+        location (Location): Location object containing climate data.
+        tilt (float): Tilt angle of the surface in degrees.
+        azimuth (float): Azimuth angle of the surface in degrees.
+        absortance (float): Surface absortance of the system's external material.
+        layers (list): List of tuples from outside to inside with material and width.
     
-    def __init__(self, location:Location, tilt = 90, azimuth = 0, absortance = 0.8):
+    Methods:
+        Tsa(absortance, tilt, azimuth): Calculates the sun-air temperature per second for the average day experienced by a surface.
+        solve(energy): Solves the constructive system's inside temperature.
+        solveAC(): Solves the constructive system's required cooling and heating energy to maintain the inside temperature.
+        
+        add_layer(material, width): Adds a layer to the constructive system.
+        remove_layer(index): Removes a layer from the constructive system by index.
+        
+        set_solver(...): Class method to set solver parameters.
+        solver_info(): Class method to print current solver parameters.
+        """
+    
+    La = 2.5    # Length of the dummy frame
+    Nx = 200    # Number of elements to discretize
+    ho = 13     # Outside convection heat transfer
+    hi = 8.6    # Inside convection heat transfer
+    dt = 600    # Time step in seconds
+
+    # Propiedades del aire empleadas en el modelo lumped-capacitance
+    AIR_DENSITY = 1.1797660470258469
+    AIR_HEAT_CAPACITY = 1005.458757
+    
+    __solver_version = 0
+
+    def __init__(self, location:Location , tilt = 90, azimuth = 0, absortance = 0.8, layers = []):
         self.tilt = tilt
         self.azimuth = azimuth
         self.absortance = absortance
         self.location = location
+        self.layers= layers
         
         self.__updated = True
         self.__tsa_dataframe = None
+        self.__solve_dataframe = None
+    
+    def info(self):
+        """
+        Prints System information.
+        """
+        print("<class 'enerhabitat.System'>")
+        print(f"Location: {self.location.city}")
+        print(f"Tilt: {self.tilt}°")
+        print(f"Azimuth: {self.azimuth}°")
+        print(f"Absortance: {self.absortance}")
+        print("Layers:")
+        for i, (material, width) in enumerate(self.layers):
+            print(f"  Layer {i+1}: {material}, {width} m")
+    
+    @property
+    def layers(self):
+        return self.__capas
+    @layers.setter
+    def layers(self, capas:list):
+        """
+        List of tuples from outside to inside with material and width.
+        Example: [('Brick',0.1), ('Insulation',0.05), ('Adobe',0.02)]
+        """
+        self.__capas = capas
+        self.__invalidate_cache()
+    
+    def add_layer(self, material:str, width:float):
+        """
+        Adds a layer to the constructive system.
+
+        Args:
+            material (str): Material name.
+            width (float): Width of the material in meters.
+        """
+        self.__capas.append((material, width))
+        self.__invalidate_cache()
+        return self.layers
+    
+    def remove_layer(self, index:int):
+        """
+        Removes a layer from the constructive system by index.
+
+        Args:
+            index (int): Index of the layer to remove.
+        """
+        if index < 0 or index >= len(self.__capas):
+            raise IndexError("Layer index out of range.")
+        del self.__capas[index]
+        self.__invalidate_cache()
+        return self.layers
     
     @property
     def location(self):
@@ -263,6 +347,7 @@ class System:
             DataFrame: Predicted sun-air temperature ( Tsa ) and solar irradiance ( Is )
             per second for the average day.
         """
+        
         """
         if solar_absortance is not None:
             self.absortance = solar_absortance
@@ -271,19 +356,70 @@ class System:
         if surface_azimuth is not None:
             self.azimuth = surface_azimuth
         """
-        if self.__tsa_dataframe is None or self.__updated:
+        if self.__tsa_dataframe is None or self.__updated or self.__tsa_solver_version != self.__class__.__solver_version:
             self.__tsa_dataframe = self.__calc_tsa()  # el método que calcula Tsa
             self.__updated = False
         return self.__tsa_dataframe
     
+    def solve(self, energy=False) -> pd.DataFrame:
+        """
+        Solves the constructive system's inside temperature with the Tsa simulation dataframe.
+
+        Args:
+            energy (bool): If True, returns also the energy transfer ET.
+        
+        Returns:
+            Ti (DataFrame): Interior temperature for the constructive system.
+        """
+        constructive_system = self.layers
+        if len(constructive_system) == 0:
+            raise ValueError("Constructive system layers are not defined.")
+        
+        recalculate = (self.__updated or 
+                        self.__solve_dataframe is None or 
+                        self.__solve_solver_version != self.__class__.__solver_version or
+                        self.__last_solve != 'temp'
+                        )
+
+        if recalculate:    
+            self.__solve_dataframe, self.__solve_energy = self.__calc_solve(energia=True)
+            self.__updated = False
+        if energy:
+            return self.__solve_dataframe, self.__solve_energy
+        else:
+            return self.__solve_dataframe
+    
+    def solveAC(self) -> pd.DataFrame:
+        """
+        Solves the constructive system's required cooling and heating energy to 
+        maintain the interior temperature with the Tsa simulation dataframe.
+
+        Returns:
+            Ti (DataFrame): Interior temperature for the constructive system.
+            Qcool, Qheat (float): Cooling energy and heating energy values.
+        """
+        constructive_system = self.layers
+        if len(constructive_system) == 0:
+            raise ValueError("Constructive system layers are not defined.")
+        
+        recalculate = (self.__updated or 
+                        self.__solve_dataframe is None or 
+                        self.__solve_solver_version != self.__class__.__solver_version or
+                        self.__last_solve != 'ac'
+                       )
+
+        if recalculate:
+            self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat = self.__calc_solve(AC=True)
+            self.__updated = False
+        return self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat
+
     def __calc_tsa(self) -> pd.DataFrame:
-        meanDay_dataframe = self.location.meanDay()
+        tsa_dataframe = self.location.meanDay()
         absortance = self.absortance
         tilt = self.tilt
         azimuth = self.azimuth
         
-        global ho
-        outside_convection_heat_transfer = ho
+        outside_convection_heat_transfer = self.__class__.ho
 
         if tilt == 0:
             LWR = 3.9
@@ -293,27 +429,24 @@ class System:
         total_irradiance = pvlib.irradiance.get_total_irradiance(
             surface_tilt=tilt,
             surface_azimuth=azimuth,
-            dni=meanDay_dataframe['Ib'],
-            ghi=meanDay_dataframe['Ig'],
-            dhi=meanDay_dataframe['Id'],
-            solar_zenith=meanDay_dataframe['zenith'],
-            solar_azimuth=meanDay_dataframe['azimuth']
+            dni=tsa_dataframe['Ib'],
+            ghi=tsa_dataframe['Ig'],
+            dhi=tsa_dataframe['Id'],
+            solar_zenith=tsa_dataframe['zenith'],
+            solar_azimuth=tsa_dataframe['azimuth']
         )
 
         # Add Is
-        meanDay_dataframe['Is'] = total_irradiance.poa_global
+        tsa_dataframe['Is'] = total_irradiance.poa_global
 
         # Add Tsa
-        meanDay_dataframe['Tsa'] = meanDay_dataframe.Ta + meanDay_dataframe.Is*absortance/outside_convection_heat_transfer - LWR
+        tsa_dataframe['Tsa'] = tsa_dataframe.Ta + tsa_dataframe.Is*absortance/outside_convection_heat_transfer - LWR
 
-        return meanDay_dataframe
-    
-    def solveCS(
-        constructive_system:list,
-        Tsa_dataframe:pd.DataFrame,
-        AC = False,
-        energia=False
-        )->pd.DataFrame:
+        self.__tsa_solver_version = self.__class__.__solver_version
+        
+        return tsa_dataframe
+
+    def __calc_solve(self, AC=False) -> pd.DataFrame:
         """
         Solves the constructive system's inside temperature with the Tsa simulation dataframe.
 
@@ -326,18 +459,19 @@ class System:
             ET (float): Energy transfer if energia=True.
             Qcool, Qheat (float): Cooling energy and heating energy values if AC=True.
         """
+        cls = self.__class__
+        
+        La = cls.La # Length of the dummy frame
+        Nx = cls.Nx # Number of elements to discretize
+        ho = cls.ho # Outside convection heat transfer
+        hi = cls.hi # Inside convection heat transfer
+        dt = cls.dt # Time step
+        AIR_DENSITY = cls.AIR_DENSITY
+        AIR_HEAT_CAPACITY = cls.AIR_HEAT_CAPACITY
 
-        global La     # Length of the dummy frame
-        global Nx     # Number of elements to discretize
-        global ho     # Outside convection heat transfer
-        global hi     # Inside convection heat transfer
-        global dt     # Time step
-
-        global AIR_DENSITY
-        global AIR_HEAT_CAPACITY
-
-        SC_dataframe = Tsa_dataframe.copy()
-
+        SC_dataframe = self.Tsa().copy()
+        constructive_system = self.layers
+        
         propiedades = materials_dict()
 
         cs = set_construction(propiedades, constructive_system)
@@ -362,6 +496,8 @@ class System:
         C = 1
         ET = 0.0
 
+        self.__solve_solver_version = self.__class__.__solver_version
+        
         if AC:  # AC = True
             while C > 5e-4: 
                 Told = T.copy()
@@ -379,11 +515,10 @@ class System:
                 C = abs(Told - Tnew).mean()
 
             SC_dataframe['Ti'] = Ti_vals
-
+            self.__last_solve = 'ac'
             return SC_dataframe['Ti'], Qcool, Qheat
 
         else:
-            ET = 0.0
             while C > 5e-4: 
                 Told = T.copy()
                 ET_iter = 0.
@@ -399,9 +534,32 @@ class System:
                 ET = ET_iter
 
             SC_dataframe['Ti'] = Ti_vals
-
-            if energia: return SC_dataframe['Ti'], ET
-            else: return SC_dataframe['Ti']
+            self.__last_solve = 'temp'
+            return SC_dataframe['Ti'], ET
 
     def __invalidate_cache(self):
         self.__updated = True
+
+    @classmethod
+    def set_solver(cls, *,
+                   La=None, Nx=None, ho=None, hi=None, dt=None,
+                   air_density=None, air_heat_capacity=None):
+        if La is not None: cls.La = La
+        if Nx is not None: cls.Nx = Nx
+        if ho is not None: cls.ho = ho
+        if hi is not None: cls.hi = hi
+        if dt is not None: cls.dt = dt
+        if air_density is not None: cls.AIR_DENSITY = air_density
+        if air_heat_capacity is not None: cls.AIR_HEAT_CAPACITY = air_heat_capacity
+        cls.__solver_version += 1
+
+    @classmethod
+    def solver_info(cls):
+        print(f"La: {cls.La}")
+        print(f"Nx: {cls.Nx}")
+        print(f"ho: {cls.ho}")
+        print(f"hi: {cls.hi}")
+        print(f"dt: {cls.dt}")
+        print(f"AIR_DENSITY: {cls.AIR_DENSITY}")
+        print(f"AIR_HEAT_CAPACITY: {cls.AIR_HEAT_CAPACITY}")
+    
