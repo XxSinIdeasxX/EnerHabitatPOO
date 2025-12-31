@@ -1,85 +1,8 @@
 import pandas as pd
 import numpy as np
-import configparser
-import os
 import math
 from numba import njit
 from dateutil.parser import parse
-
-_eh_config = "materials.ini"    # Default configuration file path
-
-"""
-=============================
-    Configuration tools
-=============================
-"""
-
-def materials_file(new_config_file=None):
-    """
-    Returns the path to the configuration file. If "new_config_file" is defined,
-    it modifies the established path. 
-
-    Args:
-        new_config_file (file, optional): Path of the configuration file to use.
-    
-    Returns:
-        str : Path to the active configuration file
-    """
-    global _eh_config
-    
-    # Determinar qué ruta usar
-    target_file = new_config_file if new_config_file is not None else _eh_config
-    
-    try:    
-        # Verificar si el archivo existe
-        if not os.path.isfile(target_file):
-            raise FileNotFoundError("f{target_file} not found")
-        
-        # Actualizar la configuración global si se proporcionó una nueva ruta
-        if new_config_file is not None:
-            _eh_config = new_config_file
-        
-    except FileNotFoundError:
-        print(f"Error: {target_file} not found")
-
-    return _eh_config      
-
-def materials_list():
-    """
-    Returns the list of materials contained in the configuration file
-
-    Returns:
-        list: List of materials in the configuration file
-    """
-    config = configparser.ConfigParser()
-    config.read(materials_file())
-    materiales = config.sections()
-    return materiales
-
-def materials_dict():
-    """
-    Returns a dictionary with the list of materials and their properties
-
-    Returns:
-        dict: _description_
-    """
-    data = configparser.ConfigParser()
-    data.read(materials_file())
-
-    class Material:
-        def __init__(self, k, rho, c):
-            self.k = k
-            self.rho = rho
-            self.c = c
-
-    materiales = {}
-    for material_i in data.sections():
-        k = float(data[material_i]['k'])
-        rho = float(data[material_i]['rho'])
-        c = float(data[material_i]['c'])
-        materiales[material_i] = Material(k, rho, c)
-    
-    return materiales
 
 """
 =============================

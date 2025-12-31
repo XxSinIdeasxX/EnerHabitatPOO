@@ -6,6 +6,7 @@ import warnings
 from datetime import datetime
 
 from .ehtools import *
+from .config import config
 
 class Location:
     """
@@ -197,7 +198,7 @@ class Location:
         
         return data
     
-class System:
+class System():
     """
     System class to model a constructive system and calculate its interior temperature
     based on the sun-air temperature experienced by the surface.
@@ -221,18 +222,6 @@ class System:
         solver_info(): Class method to print current solver parameters.
     """
     
-    __La = 2.5    # Length of the dummy frame
-    __Nx = 200    # Number of elements to discretize
-    __ho = 13     # Outside convection heat transfer
-    __hi = 8.6    # Inside convection heat transfer
-    __dt = 600    # Time step in seconds
-
-    # Propiedades del aire empleadas en el modelo lumped-capacitance
-    __AIR_DENSITY = 1.1797660470258469
-    __AIR_HEAT_CAPACITY = 1005.458757
-    
-    __solver_version = 0
-
     def __init__(self, location:Location , tilt = 90, azimuth = 0, absortance = 0.8, layers = []):
         self.tilt = tilt
         self.azimuth = azimuth
@@ -243,20 +232,6 @@ class System:
         self.__updated = True
         self.__tsa_dataframe = None
         self.__solve_dataframe = None
-    
-    def info(self):
-        """
-        Prints System information.
-        """
-        print("<class 'enerhabitat.System'>")
-        print(f"Location: {self.location.city}")
-        print(f"Tilt: {self.tilt}°")
-        print(f"Azimuth: {self.azimuth}°")
-        print(f"Absortance: {self.absortance}")
-        if len(self.layers) != 0:
-            print("Layers:")
-            for i, (material, width) in enumerate(self.layers):
-                print(f"\t{i+1}: {material}, {width} m")
     
     @property
     def layers(self):
@@ -365,7 +340,7 @@ class System:
         if surface_azimuth is not None:
             self.azimuth = surface_azimuth
         """
-        if self.__tsa_dataframe is None or self.__updated or self.__tsa_solver_version != self.__class__.__solver_version:
+        if self.__tsa_dataframe is None or self.__updated or self.__tsa_solver_version != config.version:
             self.__tsa_dataframe = self.__calc_tsa()  # el método que calcula Tsa
             self.__updated = False
         return self.__tsa_dataframe
@@ -386,7 +361,7 @@ class System:
         
         recalculate = (self.__updated or 
                         self.__solve_dataframe is None or 
-                        self.__solve_solver_version != self.__class__.__solver_version or
+                        self.__solve_solver_version != config.version or
                         self.__last_solve != 'temp'
                         )
 
@@ -413,7 +388,7 @@ class System:
         
         recalculate = (self.__updated or 
                         self.__solve_dataframe is None or 
-                        self.__solve_solver_version != self.__class__.__solver_version or
+                        self.__solve_solver_version != config.version or
                         self.__last_solve != 'ac'
                        )
 
@@ -422,6 +397,20 @@ class System:
             self.__updated = False
         return self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat
 
+    def info(self):
+        """
+        Prints System information.
+        """
+        print("<class 'enerhabitat.System'>")
+        print(f"Location: {self.location.city}")
+        print(f"Tilt: {self.tilt}°")
+        print(f"Azimuth: {self.azimuth}°")
+        print(f"Absortance: {self.absortance}")
+        if len(self.layers) != 0:
+            print("Layers:")
+            for i, (material, width) in enumerate(self.layers):
+                print(f"\t{i+1}: {material}, {width} m")
+    
     def copy(self):
         """
         Returns a copy of the System instance.
@@ -440,7 +429,7 @@ class System:
         tilt = self.tilt
         azimuth = self.azimuth
         
-        outside_convection_heat_transfer = self.__class__.__ho
+        outside_convection_heat_transfer = config.ho
 
         if tilt == 0:
             LWR = 3.9
@@ -463,7 +452,7 @@ class System:
         # Add Tsa
         tsa_dataframe['Tsa'] = tsa_dataframe.Ta + tsa_dataframe.Is*absortance/outside_convection_heat_transfer - LWR
 
-        self.__tsa_solver_version = self.__class__.__solver_version
+        self.__tsa_solver_version = config.version
         
         return tsa_dataframe
 
@@ -480,20 +469,19 @@ class System:
             ET (float): Energy transfer if energia=True.
             Qcool, Qheat (float): Cooling energy and heating energy values if AC=True.
         """
-        cls = self.__class__
         
-        La = cls.__La # Length of the dummy frame
-        Nx = cls.__Nx # Number of elements to discretize
-        ho = cls.__ho # Outside convection heat transfer
-        hi = cls.__hi # Inside convection heat transfer
-        dt = cls.__dt # Time step
-        AIR_DENSITY = cls.__AIR_DENSITY
-        AIR_HEAT_CAPACITY = cls.__AIR_HEAT_CAPACITY
+        La = config.La # Length of the dummy frame
+        Nx = config.Nx # Number of elements to discretize
+        ho = config.ho # Outside convection heat transfer
+        hi = config.hi # Inside convection heat transfer
+        dt = config.dt # Time step
+        AIR_DENSITY = config.AIR_DENSITY
+        AIR_HEAT_CAPACITY = config.AIR_HEAT_CAPACITY
 
         SC_dataframe = self.Tsa().copy()
         constructive_system = self.layers
         
-        propiedades = materials_dict()
+        propiedades = config.materials_dict()
 
         cs = set_construction(propiedades, constructive_system)
         k, rhoc, dx = set_k_rhoc(cs, Nx)
@@ -517,7 +505,7 @@ class System:
         C = 1
         ET = 0.0
 
-        self.__solve_solver_version = self.__class__.__solver_version
+        self.__solve_solver_version = config.version
         
         if AC:  # AC = True
             while C > 5e-4: 
@@ -562,48 +550,23 @@ class System:
         self.__updated = True
 
     @classmethod
-    def _set_config(cls, *,
+    def values(cls, *,
                    La=None, Nx=None, ho=None, hi=None, dt=None,
                    air_density=None, air_heat_capacity=None):
-        if La is not None: cls.__La = La
-        if Nx is not None: cls.__Nx = Nx
-        if ho is not None: cls.__ho = ho
-        if hi is not None: cls.__hi = hi
-        if dt is not None: cls.__dt = dt
-        if air_density is not None: cls.__AIR_DENSITY = air_density
-        if air_heat_capacity is not None: cls.__AIR_HEAT_CAPACITY = air_heat_capacity
-        cls.__solver_version += 1
-    
-    @classmethod
-    def _get_config(cls):
-        return {
-            'La': cls.__La,
-            'Nx': cls.__Nx,
-            'ho': cls.__ho,
-            'hi': cls.__hi,
-            'dt': cls.__dt,
-            'AIR_DENSITY': cls.__AIR_DENSITY,
-            'AIR_HEAT_CAPACITY': cls.__AIR_HEAT_CAPACITY
-        }
+        if any(param is not None for param in [La, Nx, ho, hi, dt, air_density, air_heat_capacity]):
+            if La is not None: config.La = La
+            if Nx is not None: config.Nx = Nx
+            if ho is not None: config.ho = ho
+            if hi is not None: config.hi = hi
+            if dt is not None: config.dt = dt
+            if air_density is not None: config.AIR_DENSITY = air_density
+            if air_heat_capacity is not None: config.AIR_HEAT_CAPACITY = air_heat_capacity
+            cls.__solver_version += 1
+        else:
+            return config.to_dict()
 
     @classmethod
-    def _set_config_default(cls):
-        cls.__La = 2.5
-        cls.__Nx = 200
-        cls.__ho = 13
-        cls.__hi = 8.6
-        cls.__dt = 600
-        cls.__AIR_DENSITY = 1.1797660470258469
-        cls.__AIR_HEAT_CAPACITY = 1005.458757
-        cls.__solver_version += 1
+    def default(cls):
+        config.reset()
+        cls.__solver_version = 0 
     
-    @classmethod
-    def _config_info(cls):
-        print(f"<enerhabitat.System_Solver version: {cls.__solver_version}>")
-        print(f"La: {cls.__La}")
-        print(f"Nx: {cls.__Nx}")
-        print(f"ho: {cls.__ho}")
-        print(f"hi: {cls.__hi}")
-        print(f"dt: {cls.__dt}")
-        print(f"AIR_DENSITY: {cls.__AIR_DENSITY}")
-        print(f"AIR_HEAT_CAPACITY: {cls.__AIR_HEAT_CAPACITY}")
