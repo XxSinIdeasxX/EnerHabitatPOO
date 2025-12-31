@@ -113,6 +113,12 @@ class Location:
 
         return dia_promedio
     
+    def copy(self):
+        """
+        Returns a copy of the Location instance.
+        """
+        return Location(self.epw)
+    
     def __epw_format_data(self, year = None, warns = False, alias = True):
         """
         Reads Location's EPW file and returns a formatted DataFrame.
@@ -416,6 +422,18 @@ class System:
             self.__updated = False
         return self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat
 
+    def copy(self):
+        """
+        Returns a copy of the System instance.
+        """
+        return System(
+            location=self.location.copy(),
+            tilt=self.tilt,
+            azimuth=self.azimuth,
+            absortance=self.absortance,
+            layers=self.layers.copy()
+        )
+    
     def __calc_tsa(self) -> pd.DataFrame:
         tsa_dataframe = self.location.meanDay()
         absortance = self.absortance
@@ -544,7 +562,7 @@ class System:
         self.__updated = True
 
     @classmethod
-    def _set_solver(cls, *,
+    def _set_config(cls, *,
                    La=None, Nx=None, ho=None, hi=None, dt=None,
                    air_density=None, air_heat_capacity=None):
         if La is not None: cls.__La = La
@@ -555,9 +573,33 @@ class System:
         if air_density is not None: cls.__AIR_DENSITY = air_density
         if air_heat_capacity is not None: cls.__AIR_HEAT_CAPACITY = air_heat_capacity
         cls.__solver_version += 1
+    
+    @classmethod
+    def _get_config(cls):
+        return {
+            'La': cls.__La,
+            'Nx': cls.__Nx,
+            'ho': cls.__ho,
+            'hi': cls.__hi,
+            'dt': cls.__dt,
+            'AIR_DENSITY': cls.__AIR_DENSITY,
+            'AIR_HEAT_CAPACITY': cls.__AIR_HEAT_CAPACITY
+        }
 
     @classmethod
-    def _solver_info(cls):
+    def _set_config_default(cls):
+        cls.__La = 2.5
+        cls.__Nx = 200
+        cls.__ho = 13
+        cls.__hi = 8.6
+        cls.__dt = 600
+        cls.__AIR_DENSITY = 1.1797660470258469
+        cls.__AIR_HEAT_CAPACITY = 1005.458757
+        cls.__solver_version += 1
+    
+    @classmethod
+    def _config_info(cls):
+        print(f"<enerhabitat.System_Solver version: {cls.__solver_version}>")
         print(f"La: {cls.__La}")
         print(f"Nx: {cls.__Nx}")
         print(f"ho: {cls.__ho}")
@@ -565,4 +607,3 @@ class System:
         print(f"dt: {cls.__dt}")
         print(f"AIR_DENSITY: {cls.__AIR_DENSITY}")
         print(f"AIR_HEAT_CAPACITY: {cls.__AIR_HEAT_CAPACITY}")
-    
