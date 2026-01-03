@@ -108,7 +108,9 @@ class Location:
     def meanDay(self,
         day = None,
         month = None,
-        year = None) -> pd.DataFrame:
+        year = None,
+        flag=False
+        ) -> pd.DataFrame:
         """
         Calculates the ambient temperature per second for the average day based on Location data.
         """
@@ -126,10 +128,14 @@ class Location:
                 self.__year = year
                 self.__updated = True
 
-        if self.__meanday_dataframe is None or self.__updated:
+        recalculate = (self.__meanday_dataframe is None or 
+                       self.__updated)
+        if recalculate:
             self.__meanday_dataframe = self.__calc_meanday(day=self.__day, month=self.__month, year=self.__year)
             self.__updated = False
-
+            
+        if flag:
+            return self.__meanday_dataframe, recalculate
         return self.__meanday_dataframe
 
     def __calc_meanday(self,
@@ -388,6 +394,7 @@ class System():
             self.__invalidate_cache()
 
     def Tsa(self,
+            flag=False
             # solar_absortance:float=None,
             # surface_tilt:float=None,
             # surface_azimuth:float=None
@@ -410,14 +417,20 @@ class System():
         if surface_azimuth is not None:
             self.azimuth = surface_azimuth
         """
-
-        if self.__tsa_dataframe is None or self.__updated or self.__tsa_solver_version != config.version:
-            self.__tsa_dataframe = self.__calc_tsa(self.location.meanDay())  # el método que calcula Tsa
+        mean_dataframe, mean_flag =self.location.meanDay(flag=True)  # Asegura que el DataFrame del día medio esté actualizado
+        
+        recalculate = (self.__tsa_dataframe is None or
+                       self.__updated or 
+                       self.__tsa_solver_version != config.version or 
+                       mean_flag)
+        if recalculate:
+            self.__tsa_dataframe = self.__calc_tsa(mean_dataframe)  # el método que calcula Tsa
             self.__updated = False
-            
+        if flag:
+            return self.__tsa_dataframe, recalculate
         return self.__tsa_dataframe
     
-    def solve(self, energy=False) -> pd.DataFrame:
+    def solve(self, energy=False, flag=False) -> pd.DataFrame:
         """
         Solves the constructive system's inside temperature with the Tsa simulation dataframe.
 
@@ -440,12 +453,13 @@ class System():
         if recalculate:    
             self.__solve_dataframe, self.__solve_energy = self.__calc_solve(AC=False)
             self.__updated = False
+            
         if energy:
-            return self.__solve_dataframe, self.__solve_energy
+            return self.__solve_dataframe, self.__solve_energy, (recalculate if flag else None)
         else:
-            return self.__solve_dataframe
+            return self.__solve_dataframe, (recalculate if flag else None)
     
-    def solveAC(self) -> pd.DataFrame:
+    def solveAC(self, flag=False) -> pd.DataFrame:
         """
         Solves the constructive system's required cooling and heating energy to 
         maintain the interior temperature with the Tsa simulation dataframe.
@@ -467,6 +481,9 @@ class System():
         if recalculate:
             self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat = self.__calc_solve(AC=True)
             self.__updated = False
+        
+        if flag:
+            return self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat, recalculate
         return self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat
 
     def info(self):
