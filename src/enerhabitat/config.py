@@ -2,33 +2,29 @@ import configparser
 import os
 
 class Config:
+    """
+    Global configuration class for EnerHabitat simulations.
+    
+    Attributes:
+        file (str): Path to the materials configuration file.
+        La (float): Length of the dummy frame (m).
+        Nx (int): Number of discretization elements.
+        ho (float): Outdoor convective coefficient (W/m²K).
+        hi (float): Indoor convective coefficient (W/m²K).
+        dt (float): Time step (seconds).
+        AIR_DENSITY (float): Density of air (kg/m³).
+        AIR_HEAT_CAPACITY (float): Heat capacity of air (J/kgK).
+        
+    Methods:
+        materials_list(): Returns the list of materials in the configuration file.
+        materials_dict(): Returns a dictionary of materials and their properties.
+        reset(): Resets configuration parameters to default values.
+        info(): Prints the current configuration parameters.
+        to_dict(): Returns the current configuration parameters as a dictionary.
+    """
     def __init__(self):
         self.reset()
         self.__materials_file = "materials.ini"   # Default configuration file path
-
-    @property
-    def file(self):
-        try:    
-            # Verificar si el archivo existe
-            if not os.path.isfile(self.__materials_file):
-                raise FileNotFoundError()
-            return self.__materials_file
-        except FileNotFoundError:
-            print(f"Error: {self.__materials_file} not found")
-        
-    
-    @file.setter
-    def file(self, new_file):
-        try:    
-            # Verificar si el archivo existe
-            if not os.path.isfile(new_file):
-                raise FileNotFoundError()
-
-            # Actualizar la configuración global si se proporcionó una nueva ruta
-            self.__materials_file = new_file
-
-        except FileNotFoundError:
-            print(f"Error: {new_file} not found")    
 
     def materials_list(self):
         """
@@ -78,13 +74,59 @@ class Config:
 
         self.version = 0
         
+    def info(self):
+        print("<enerhabitat.Config -- Current config Parameters>")
+        print(f"Materials file: \t\t\t{self.__materials_file}")
+        print(f"La (Length of dummy frame): \t\t{self.La} m")
+        print(f"Nx (Number of discretization elements):\t{self.Nx}")
+        print(f"ho (Outdoor convective coefficient): \t{self.ho} W/m²K")
+        print(f"hi (Indoor convective coefficient): \t{self.hi} W/m²K")
+        print(f"dt (Time step): \t\t\t{self.dt} seconds")
+        print(f"\nAIR_DENSITY: \t\t\t\t{self.AIR_DENSITY} kg/m³")
+        print(f"AIR_HEAT_CAPACITY: \t\t\t{self.AIR_HEAT_CAPACITY} J/kgK")
+    
+    def to_dict(self):
+        return {
+            "La": self.La,
+            "Nx": self.Nx,
+            "ho": self.ho,
+            "hi": self.hi,
+            "dt": self.dt,
+            "AIR_DENSITY": self.AIR_DENSITY,
+            "AIR_HEAT_CAPACITY": self.AIR_HEAT_CAPACITY,
+        }
+
+    @property
+    def file(self):
+        try:    
+            # Verificar si el archivo existe
+            if not os.path.isfile(self.__materials_file):
+                raise FileNotFoundError()
+            return self.__materials_file
+        except FileNotFoundError:
+            print(f"Error: {self.__materials_file} not found")
+            
+    @file.setter
+    def file(self, new_file):
+        try:    
+            # Verificar si el archivo existe
+            if not os.path.isfile(new_file):
+                raise FileNotFoundError()
+
+            # Actualizar la configuración global si se proporcionó una nueva ruta
+            self.__materials_file = new_file
+
+        except FileNotFoundError:
+            print(f"Error: {new_file} not found")    
+        
     @property
     def La(self):
-        return self.__La  
+        return self.__La
     @La.setter
     def La(self, value):
         self.__La = value
         self.version += 1
+        
     @property
     def Nx(self):
         return self.__Nx
@@ -92,6 +134,7 @@ class Config:
     def Nx(self, value):
         self.__Nx = value
         self.version += 1
+        
     @property
     def ho(self):
         return self.__ho
@@ -132,26 +175,5 @@ class Config:
         self.__AIR_HEAT_CAPACITY = value
         self.version += 1
     
-    def info(self):
-        print(" -- Current Config Parameters --")
-        print(f"Materials file: {self.__materials_file}")
-        print(f"La (Length of dummy frame): {self.La} m")
-        print(f"Nx (Number of discretization elements): {self.Nx}")
-        print(f"ho (Outdoor convective coefficient): {self.ho} W/m²K")
-        print(f"hi (Indoor convective coefficient): {self.hi} W/m²K")
-        print(f"dt (Time step): {self.dt} seconds")
-        print(f"\nAIR_DENSITY: {self.AIR_DENSITY} kg/m³")
-        print(f"AIR_HEAT_CAPACITY: {self.AIR_HEAT_CAPACITY} J/kgK")
-    
-    def to_dict(self):
-        return {
-            "La": self.La,
-            "Nx": self.Nx,
-            "ho": self.ho,
-            "hi": self.hi,
-            "dt": self.dt,
-            "AIR_DENSITY": self.AIR_DENSITY,
-            "AIR_HEAT_CAPACITY": self.AIR_HEAT_CAPACITY,
-        }
-
+# Global configuration instance
 config = Config()

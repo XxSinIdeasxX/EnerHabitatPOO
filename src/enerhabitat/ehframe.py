@@ -24,15 +24,18 @@ class Location:
         meanDay(day, month, year): Calculates the ambient temperature per second for the average day
         info(): Prints Location's attributes information.
         copy(): Returns a copy of the Location instance.
+        flag(): Returns a copy of the internal flag dictionary.
     """
     
     def __init__(self, epw_file:str):
         self.file = epw_file
         
         self.__meanday_dataframe = None
-        self.__day = "15"
-        self.__month = "current_month"
-        self.__year = "current_year"
+        self.__flag = {"recalculate": True,
+                       "date": None,
+                       "day": "15",
+                       "month": "current_month",
+                       "year": "current_year"}
         
     def info(self):
         """
@@ -46,108 +49,53 @@ class Location:
         print(f'Altitude: {self.altitude} m')
         print(f'File: {self.file}')
     
-    @property
-    def city(self):
-        return self.__city
-    @city.setter
-    def city(self, value):
-        pass
-    
-    @property
-    def timezone(self):
-        return self.__timezone
-    @timezone.setter
-    def timezone(self, value):
-        pass
-    
-    @property
-    def latitude(self):
-        return self.__latitude
-    @latitude.setter
-    def latitude(self, value):
-        pass
-    
-    @property
-    def longitude(self):
-        return self.__longitude
-    @longitude.setter
-    def longitude(self, value):
-        pass
-    
-    @property
-    def altitude(self):
-        return self.__altitude
-    @altitude.setter
-    def altitude(self, value):
-        pass
-        
-    @property
-    def file(self):
-        return self.__epw_path
-    @file.setter
-    def file(self, file):
-        """
-        EPW file containing climate data. Attributes timezone, longitude, latitude, altitude are taken from this file.
-        """
-        datos=[]
-        
-        with open(file,'r') as epw:
-            datos=epw.readline().split(',')
-            
-        self.__epw_path = file
-        self.__city = str(datos[1]) + ", " + str(datos[2])
-        self.__latitude = float(datos[6])
-        self.__longitude = float(datos[7])
-        self.__altitude = float(datos[9])
-        
-        tmz = int(datos[8].split('.')[0])
-        self.__timezone = pytz.timezone('Etc/GMT'+f'{(-tmz):+}')
-        
-        self.__invalidate_cache()
-
     def meanDay(self,
-        day = None,
-        month = None,
-        year = None,
-        flag=False
+        day = "15",
+        month = "current",
+        year = "current",
         ) -> pd.DataFrame:
         """
         Calculates the ambient temperature per second for the average day based on Location data.
         """
+        if month == "current": month = datetime.now().month
+        if year == "current": year = datetime.now().year
+
+        day = str(day)
+        month = str(month)
+        year = str(year)
         
-        if day is not None:
-            if day != self.__day:
-                self.__day = day
-                self.__invalidate_cache()
-        if month is not None:
-            if month != self.__month:
-                self.__month = month
-                self.__invalidate_cache()
-        if year is not None:
-            if year != self.__year:
-                self.__year = year
-                self.__invalidate_cache()
+        if day != self.__flag['day']:
+            self.__flag['day'] = day
+            self.__invalidate_cache()
+        if month != self.__flag['month']:
+            self.__flag['month'] = month
+            self.__invalidate_cache()
+        if year != self.__flag['year']:
+            self.__flag['year'] = year
+            self.__invalidate_cache()
 
         recalculate = (self.__meanday_dataframe is None or 
                        self.__updated)
+        
+        self.__flag['recalculate'] = recalculate
+        self.__flag['date'] = self.__flag['day'] + '-' + self.__flag['month'] + '-' + self.__flag['year']
+        
         if recalculate:
-            self.__meanday_dataframe = self.__calc_meanday(day=self.__day, month=self.__month, year=self.__year)
+            self.__meanday_dataframe = self.__calc_meanday()
             self.__updated = False
-            
-        if flag:
-            bandera = {'recalculate': recalculate,
-                       'date': str(self.__day) + '-' + str(self.__month) + '-' + str(self.__year),
-                       'day': str(self.__day),
-                       'month': str(self.__month),
-                       'year': str(self.__year)}
-            return self.__meanday_dataframe, bandera
+
         return self.__meanday_dataframe
 
-    def __calc_meanday(self,
-        day = "15",
-        month = "current_month",
-        year = "current_year"
-        ) -> pd.DataFrame:
+    def copy(self):
+        """
+        Returns a copy of the Location instance.
+        """
+        return Location(self.file)
+    
+    def flag(self):
+        return self.__flag.copy()
+    
+    def __calc_meanday(self) -> pd.DataFrame:
         """
         Calculates the ambient temperature per second for the average day based on Location data.
 
@@ -162,9 +110,9 @@ class Location:
         """
         
         # print("Calculating mean day...")
-        
-        if month == "current_month": month = datetime.now().month
-        if year == "current_year": year = datetime.now().year
+        day = self.__flag['day']
+        month = self.__flag['month']
+        year = self.__flag['year']
 
         f1 = f'{year}-{month}-{day} 00:00'
         f2 = f'{year}-{month}-{day} 23:59'
@@ -196,14 +144,8 @@ class Location:
         dia_promedio['DeltaTn'] = calculate_DtaTn(DeltaTa)
 
         return dia_promedio
-    
-    def copy(self):
-        """
-        Returns a copy of the Location instance.
-        """
-        return Location(self.file)
-    
-    def __epw_format_data(self, year = None, warns = False, alias = True):
+
+    def __epw_format_data(self, year = None, warns = False, alias = True) -> pd.DataFrame:
         """
         Reads Location's EPW file and returns a formatted DataFrame.
             year : None default to leave intact the year or change if desired. It raises a warning.
@@ -283,6 +225,65 @@ class Location:
 
     def __invalidate_cache(self):
         self.__updated = True
+        
+    @property
+    def file(self):
+        return self.__epw_path
+    @file.setter
+    def file(self, file):
+        """
+        EPW file containing climate data. Attributes timezone, longitude, latitude, altitude are taken from this file.
+        """
+        datos=[]
+        
+        with open(file,'r') as epw:
+            datos=epw.readline().split(',')
+            
+        self.__epw_path = file
+        self.__city = str(datos[1]) + ", " + str(datos[2])
+        self.__latitude = float(datos[6])
+        self.__longitude = float(datos[7])
+        self.__altitude = float(datos[9])
+        
+        tmz = int(datos[8].split('.')[0])
+        self.__timezone = pytz.timezone('Etc/GMT'+f'{(-tmz):+}')
+        
+        self.__invalidate_cache()
+    
+    @property
+    def city(self):
+        return self.__city
+    @city.setter
+    def city(self, value):
+        pass
+    
+    @property
+    def timezone(self):
+        return self.__timezone
+    @timezone.setter
+    def timezone(self, value):
+        pass
+    
+    @property
+    def latitude(self):
+        return self.__latitude
+    @latitude.setter
+    def latitude(self, value):
+        pass
+    
+    @property
+    def longitude(self):
+        return self.__longitude
+    @longitude.setter
+    def longitude(self, value):
+        pass
+    
+    @property
+    def altitude(self):
+        return self.__altitude
+    @altitude.setter
+    def altitude(self, value):
+        pass    
     
 class System():
     """
@@ -296,14 +297,14 @@ class System():
         layers (list): List of tuples from outside to inside with material and width.
     
     Methods:
-        Tsa(absortance, tilt, azimuth): Calculates the sun-air temperature per second for the average day experienced by a surface.
+        Tsa(): Calculates the sun-air temperature per second for the average day experienced by a surface.
         solve(energy): Solves the constructive system's inside temperature.
         solveAC(): Solves the constructive system's required cooling and heating energy to maintain the inside temperature.
-    """
-    """
+        info(): Prints System information.
+        copy(): Returns a copy of the System instance.
+        flag(): Returns a copy of the internal flag dictionary.
         add_layer(material, width): Adds a layer to the constructive system.
         remove_layer(index): Removes a layer from the constructive system by index.
-        
     """
     
     def __init__(self, location:Location , tilt = 90, azimuth = 0, absortance = 0.8, layers = []):
@@ -313,22 +314,161 @@ class System():
         self.location = location
         self.layers= layers
         
-        self.__current_date = None
+        self.__flag = {"recalculate": True,
+                       "tsa_date": None,
+                       "solve_date": None,
+                       "config": config.to_dict()
+                       }
+        self.__update_flag()
         self.__tsa_dataframe = None
         self.__solve_dataframe = None
         self.__invalidate_cache()
+        
+    def Tsa(self,
+            # solar_absortance:float=None,
+            # surface_tilt:float=None,
+            # surface_azimuth:float=None
+            ) -> pd.DataFrame: 
+        """
+        Sun-air temperature per second for the average day experienced
+        by a surface based on a meanDay dataframe from System's Location
+        (Ta, Ig, Ib and Id).
+
+        Returns:
+            DataFrame: Predicted sun-air temperature ( Tsa ) and solar irradiance ( Is )
+            per second for the average day.
+        """
+        
+        """
+        if solar_absortance is not None:
+            self.absortance = solar_absortance
+        if surface_tilt is not None:
+            self.tilt = surface_tilt
+        if surface_azimuth is not None:
+            self.azimuth = surface_azimuth
+        """
+        
+        mean_date = self.location.flag()["date"]  # Asegura que el DataFrame del día medio esté actualizado
+        
+        if  self.__flag["tsa_date"] != mean_date:
+            self.__flag["tsa_date"] = mean_date
+            self.__invalidate_cache()
+        
+        self.__update_flag()
+        
+        recalculate = (self.__tsa_dataframe is None or
+                       self.__updated or 
+                       self.__tsa_solver_version != config.version
+                       )
+        
+        if recalculate:
+            self.__tsa_dataframe = self.__calc_tsa()  # el método que calcula Tsa
+            self.__updated = False
+        
+        self.__flag['recalculate'] = recalculate
+        return self.__tsa_dataframe
     
-    @property
-    def layers(self):
-        return self.__capas
-    @layers.setter
-    def layers(self, capas:list):
+    def solve(self, energy=False) -> pd.DataFrame:
         """
-        List of tuples from outside to inside with material and width.
-        Example: [('Brick',0.1), ('Insulation',0.05), ('Adobe',0.02)]
+        Solves the constructive system's inside temperature with the Tsa simulation dataframe.
+
+        Args:
+            energy (bool): If True, returns also the energy transfer ET.
+        
+        Returns:
+            Ti (DataFrame): Interior temperature for the constructive system.
         """
-        self.__capas = capas
-        self.__invalidate_cache()
+        constructive_system = self.layers
+        if len(constructive_system) == 0:
+            raise ValueError("Constructive system layers are not defined.")
+        
+        if self.__flag["tsa_date"] != self.__flag['solve_date']:
+            self.__flag["solve_date"] = self.__flag['tsa_date']
+            self.__invalidate_cache()
+        
+        self.__update_flag()
+        
+        recalculate = (self.__updated or 
+                        self.__solve_dataframe is None or 
+                        self.__solve_solver_version != config.version or
+                        self.__last_solve != 'temp'
+                        )
+        
+        self.__flag['recalculate'] = recalculate
+        
+        if recalculate:    
+            self.__solve_dataframe, self.__solve_energy = self.__calc_solve(AC=False)
+            self.__updated = False
+            
+        if energy:
+            return self.__solve_dataframe, self.__solve_energy
+        else:
+            return self.__solve_dataframe
+    
+    def solveAC(self) -> pd.DataFrame:
+        """
+        Solves the constructive system's required cooling and heating energy to 
+        maintain the interior temperature with the Tsa simulation dataframe.
+
+        Returns:
+            Ti (DataFrame): Interior temperature for the constructive system.
+            Qcool, Qheat (float): Cooling energy and heating energy values.
+        """
+        constructive_system = self.layers
+        if len(constructive_system) == 0:
+            raise ValueError("Constructive system layers are not defined.")
+        
+        if self.__flag["tsa_date"] != self.__flag['solve_date']:
+            self.__flag["solve_date"] = self.__flag['tsa_date']
+            self.__invalidate_cache()
+        
+        self.__update_flag()
+        
+        recalculate = (self.__updated or 
+                        self.__solve_dataframe is None or 
+                        self.__solve_solver_version != config.version or
+                        self.__last_solve != 'ac'
+                       )
+
+        self.__flag['recalculate'] = recalculate
+        
+        if recalculate:
+            self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat = self.__calc_solve(AC=True)
+            self.__updated = False
+        
+        return self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat
+
+    def info(self):
+        """
+        Prints System information.
+        """
+        print("<class 'enerhabitat.System'>")
+        print(f"Location: {self.location.city}")
+        print(f"meanDay date: {self.location.flag()['date']}")
+        print(f"Tilt: {self.tilt}°")
+        print(f"Azimuth: {self.azimuth}°")
+        print(f"Absortance: {self.absortance}")
+        if len(self.layers) != 0:
+            print("Layers:")
+            for i, (material, width) in enumerate(self.layers):
+                print(f"\t{i+1}: {material}, {width} m")
+        else:
+            print("Layers: No layers defined")
+    
+    def copy(self):
+        """
+        Returns a copy of the System instance.
+        """
+        return System(
+            location=self.location.copy(),
+            tilt=self.tilt,
+            azimuth=self.azimuth,
+            absortance=self.absortance,
+            layers=self.layers.copy()
+        )
+    
+    def flag(self):
+       return self.__flag.copy()
     
     def add_layer(self, material:str, width:float):
         """
@@ -355,202 +495,22 @@ class System():
         self.__invalidate_cache()
         return self.layers
     
-    @property
-    def location(self):
-        return self.__instance_location
-    @location.setter
-    def location(self, loc:Location):
+    def __update_flag(self):
         """
-        Location object containing climate data.
+        Checks for changes and updates the flag["config"] in the System instance.
         """
-        self.__instance_location = loc
-        self.__invalidate_cache()
-
-    @property
-    def tilt(self):
-        return self.__tilt
-    @tilt.setter
-    def tilt(self, angle:float):
-        """
-        Tilt angle of the surface in degrees.
-        """
-        if angle != getattr(self, "__tilt", None):
-            self.__tilt = angle
-            self.__invalidate_cache()
-        
-    @property
-    def azimuth(self):
-        return self.__azimuth
-    @azimuth.setter
-    def azimuth(self, angle:float):
-        """
-        Azimuth angle of the surface in degrees.
-        """
-        if angle != getattr(self, "__azimuth", None):
-            self.__azimuth = angle
+        if self.__flag["config"] != config.to_dict():
+            self.__flag["config"] = config.to_dict()
             self.__invalidate_cache()
 
-    @property
-    def absortance(self):
-        return self.__absortance
-    @absortance.setter
-    def absortance(self, value:float):
-        """
-        Surface absortance of the system's external material.
-        """
-        if value != getattr(self, "__absortance", None):
-            self.__absortance = value
-            self.__invalidate_cache()
-
-    def Tsa(self,
-            flag=False
-            # solar_absortance:float=None,
-            # surface_tilt:float=None,
-            # surface_azimuth:float=None
-            ) -> pd.DataFrame: 
-        """
-        Sun-air temperature per second for the average day experienced
-        by a surface based on a meanDay dataframe from System's Location
-        (Ta, Ig, Ib and Id).
-
-        Returns:
-            DataFrame: Predicted sun-air temperature ( Tsa ) and solar irradiance ( Is )
-            per second for the average day.
-        """
-        
-        """
-        if solar_absortance is not None:
-            self.absortance = solar_absortance
-        if surface_tilt is not None:
-            self.tilt = surface_tilt
-        if surface_azimuth is not None:
-            self.azimuth = surface_azimuth
-        """
-        
-        unused_mean_dataframe, mean_flag = self.location.meanDay(flag=True)  # Asegura que el DataFrame del día medio esté actualizado
-        
-        if  self.__current_date != mean_flag['date']:
-            self.__current_date = mean_flag['date']
-            self.__invalidate_cache()
-            
-        recalculate = (self.__tsa_dataframe is None or
-                       self.__updated or 
-                       self.__tsa_solver_version != config.version
-                       )
-        
-        if recalculate:
-            self.__tsa_dataframe = self.__calc_tsa()  # el método que calcula Tsa
-            self.__updated = False
-            
-        if flag:
-            bandera = mean_flag
-            bandera['recalculate'] = recalculate
-            return self.__tsa_dataframe, bandera
-        return self.__tsa_dataframe
-    
-    def solve(self, energy=False, flag=False) -> pd.DataFrame:
-        """
-        Solves the constructive system's inside temperature with the Tsa simulation dataframe.
-
-        Args:
-            energy (bool): If True, returns also the energy transfer ET.
-        
-        Returns:
-            Ti (DataFrame): Interior temperature for the constructive system.
-        """
-        constructive_system = self.layers
-        if len(constructive_system) == 0:
-            raise ValueError("Constructive system layers are not defined.")
-        
-        unused_tsa_data, tsa_flag = self.Tsa(flag=True)
-        if self.__current_date != tsa_flag['date']:
-            self.__current_date = tsa_flag['date']
-            self.__invalidate_cache()
-        
-        recalculate = (self.__updated or 
-                        self.__solve_dataframe is None or 
-                        self.__solve_solver_version != config.version or
-                        self.__last_solve != 'temp'
-                        )
-
-        if recalculate:    
-            self.__solve_dataframe, self.__solve_energy = self.__calc_solve(AC=False)
-            self.__updated = False
-        
-        if flag:
-            bandera = {'recalculate': recalculate}
-            if energy:
-                return self.__solve_dataframe, self.__solve_energy, bandera
-            else:
-                return self.__solve_dataframe, bandera
-            
-        if energy:
-            return self.__solve_dataframe, self.__solve_energy
-        else:
-            return self.__solve_dataframe
-    
-    def solveAC(self, flag=False) -> pd.DataFrame:
-        """
-        Solves the constructive system's required cooling and heating energy to 
-        maintain the interior temperature with the Tsa simulation dataframe.
-
-        Returns:
-            Ti (DataFrame): Interior temperature for the constructive system.
-            Qcool, Qheat (float): Cooling energy and heating energy values.
-        """
-        constructive_system = self.layers
-        if len(constructive_system) == 0:
-            raise ValueError("Constructive system layers are not defined.")
-        
-        unused_tsa_data, tsa_flag = self.Tsa(flag=True)
-        if self.__current_date != tsa_flag['date']:
-            self.__current_date = tsa_flag['date']
-            self.__invalidate_cache()
-        
-        recalculate = (self.__updated or 
-                        self.__solve_dataframe is None or 
-                        self.__solve_solver_version != config.version or
-                        self.__last_solve != 'ac'
-                       )
-
-        if recalculate:
-            self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat = self.__calc_solve(AC=True)
-            self.__updated = False
-        
-        if flag:
-            return self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat, recalculate
-        return self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat
-
-    def info(self):
-        """
-        Prints System information.
-        """
-        print("<class 'enerhabitat.System'>")
-        print(f"Location: {self.location.city}")
-        print(f"Tilt: {self.tilt}°")
-        print(f"Azimuth: {self.azimuth}°")
-        print(f"Absortance: {self.absortance}")
-        if len(self.layers) != 0:
-            print("Layers:")
-            for i, (material, width) in enumerate(self.layers):
-                print(f"\t{i+1}: {material}, {width} m")
-        else:
-            print("Layers: No layers defined")
-    
-    def copy(self):
-        """
-        Returns a copy of the System instance.
-        """
-        return System(
-            location=self.location.copy(),
-            tilt=self.tilt,
-            azimuth=self.azimuth,
-            absortance=self.absortance,
-            layers=self.layers.copy()
-        )
-    
     def __calc_tsa(self) -> pd.DataFrame:
-        tsa_dataframe = self.location.meanDay().copy()
+        
+        if self.__flag['tsa_date'] is not None:
+            tsa_date = self.__flag['tsa_date'].split('-')
+            tsa_dataframe = self.location.meanDay(day=tsa_date[0], month=tsa_date[1], year=tsa_date[2]).copy()
+        else:
+            tsa_dataframe = self.location.meanDay().copy()
+            
         absortance = self.absortance
         tilt = self.tilt
         azimuth = self.azimuth
@@ -674,25 +634,64 @@ class System():
 
     def __invalidate_cache(self):
         self.__updated = True
+        
+    @property
+    def layers(self):
+        return self.__capas
+    @layers.setter
+    def layers(self, capas:list):
+        """
+        List of tuples from outside to inside with material and width.
+        Example: [('Brick',0.1), ('Insulation',0.05), ('Adobe',0.02)]
+        """
+        self.__capas = capas
+        self.__invalidate_cache()
+    
+    @property
+    def location(self):
+        return self.__instance_location
+    @location.setter
+    def location(self, loc:Location):
+        """
+        Location object containing climate data.
+        """
+        self.__instance_location = loc
+        self.__invalidate_cache()
 
-    @classmethod
-    def values(cls, *,
-                   La=None, Nx=None, ho=None, hi=None, dt=None,
-                   air_density=None, air_heat_capacity=None):
-        if any(param is not None for param in [La, Nx, ho, hi, dt, air_density, air_heat_capacity]):
-            if La is not None: config.La = La
-            if Nx is not None: config.Nx = Nx
-            if ho is not None: config.ho = ho
-            if hi is not None: config.hi = hi
-            if dt is not None: config.dt = dt
-            if air_density is not None: config.AIR_DENSITY = air_density
-            if air_heat_capacity is not None: config.AIR_HEAT_CAPACITY = air_heat_capacity
-            cls.__solver_version += 1
-        else:
-            return config.to_dict()
+    @property
+    def tilt(self):
+        return self.__tilt
+    @tilt.setter
+    def tilt(self, angle:float):
+        """
+        Tilt angle of the surface in degrees.
+        """
+        if angle != getattr(self, "__tilt", None):
+            self.__tilt = angle
+            self.__invalidate_cache()
+        
+    @property
+    def azimuth(self):
+        return self.__azimuth
+    @azimuth.setter
+    def azimuth(self, angle:float):
+        """
+        Azimuth angle of the surface in degrees.
+        """
+        if angle != getattr(self, "__azimuth", None):
+            self.__azimuth = angle
+            self.__invalidate_cache()
 
-    @classmethod
-    def default(cls):
-        config.reset()
-        cls.__solver_version = 0 
+    @property
+    def absortance(self):
+        return self.__absortance
+    @absortance.setter
+    def absortance(self, value:float):
+        """
+        Surface absortance of the system's external material.
+        """
+        if value != getattr(self, "__absortance", None):
+            self.__absortance = value
+            self.__invalidate_cache()
+
     
