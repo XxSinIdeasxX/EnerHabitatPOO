@@ -5,7 +5,7 @@
 - [Getting started](#getting-started)
   - [Installation](#installation)
   - [Folder structure](#folder-structure)
-- [Main functions](#main-functions)
+- [Main Structures](#main-functions)
   - [meanDay](#meanday)
   - [Tsa](#tsa)
   - [solveCS](#solvecs)
@@ -52,14 +52,19 @@ The following shows the basic folder structure recommended
     └── example_file.epw
 ```
 
-## Main functions
+## Main structures
 
 Load the EnerHabitat package for use
 ```python
 import enerhabitat as eh
 ```
 
-### meanDay
+### Location
+
+#### Attributes
+
+#### Methods
+##### meanDay ()
 Calculates the ambient temperature, global, beam and diffuse irradiance per second for the average day based on EPW file
 ```python
 dia_promedio = eh.meanDay(epw_file = "epw/example_file.epw")
@@ -71,7 +76,12 @@ time | zenith | elevation | azimuth | equation_of_time | Ta | Ig | Ib | Id |Tn |
 :---: | :---: | :---: | :---: | :---: |:---: | :---: | :---: | :---: | :---: | :---:
  ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | ...
 
-### Tsa
+### System
+
+#### Attributes
+
+#### Methods
+##### Tsa()
 
 Calculates the sol-air temperature and solar irradiance per second for the average day
 
@@ -86,21 +96,18 @@ Tsa = eh.Tsa(
 
 ```
 
-### solveCS
+##### solve()
 Solves the constructive system heat transfer to calculate inside temperature for a Tsa simulation
 
 ```python
 
 # list of tuples from outside to inside with material and width
-constructive_system = [
+ex_system.layers = [
     ("material_1" , L_1),
     ("material_n", L_n)
 ]
 
-interior = eh.solveCS(
-    constructive_system,  
-    Tsa      # DataFrame with Tn, Ta, Tsa
-    )
+interior = ex_system.solve(energy)      # DataFrame with Tn, Ta, Tsa
 
 ```
 

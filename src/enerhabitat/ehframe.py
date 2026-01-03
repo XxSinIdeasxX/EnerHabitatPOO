@@ -13,7 +13,7 @@ class Location:
     Location class to handle climate data from an EPW file.
 
     Attributes:
-        epw (str): Path to the EPW file containing climate data.
+        file (str): Path to the EPW file containing climate data.
         city (str): City of the location.
         latitude (float): Latitude of the location.
         longitude (float): Longitude of the location.
@@ -22,10 +22,17 @@ class Location:
 
     Methods:
         meanDay(day, month, year): Calculates the ambient temperature per second for the average day
+        info(): Prints Location's attributes information.
+        copy(): Returns a copy of the Location instance.
     """
     
     def __init__(self, epw_file:str):
-        self.epw = epw_file
+        self.file = epw_file
+        
+        self.__meanday_dataframe = None
+        self.__day = "15"
+        self.__month = "current_month"
+        self.__year = "current_year"
         
     def info(self):
         """
@@ -37,14 +44,48 @@ class Location:
         print(f'Latitude: {self.latitude}°')
         print(f'Longitude: {self.longitude}°')
         print(f'Altitude: {self.altitude} m')
-        print(f'File: {self.epw}')
+        print(f'File: {self.file}')
+    
+    @property
+    def city(self):
+        return self.__city
+    @city.setter
+    def city(self, value):
+        pass
+    
+    @property
+    def timezone(self):
+        return self.__timezone
+    @timezone.setter
+    def timezone(self, value):
+        pass
+    
+    @property
+    def latitude(self):
+        return self.__latitude
+    @latitude.setter
+    def latitude(self, value):
+        pass
+    
+    @property
+    def longitude(self):
+        return self.__longitude
+    @longitude.setter
+    def longitude(self, value):
+        pass
+    
+    @property
+    def altitude(self):
+        return self.__altitude
+    @altitude.setter
+    def altitude(self, value):
+        pass
         
     @property
-    def epw(self):
+    def file(self):
         return self.__epw_path
-
-    @epw.setter
-    def epw(self, file):
+    @file.setter
+    def file(self, file):
         """
         EPW file containing climate data. Attributes timezone, longitude, latitude, altitude are taken from this file.
         """
@@ -54,15 +95,44 @@ class Location:
             datos=epw.readline().split(',')
             
         self.__epw_path = file
-        self.city = str(datos[1]) + ", " + str(datos[2])
-        self.latitude = float(datos[6])
-        self.longitude = float(datos[7])
-        self.altitude = float(datos[9])
+        self.__city = str(datos[1]) + ", " + str(datos[2])
+        self.__latitude = float(datos[6])
+        self.__longitude = float(datos[7])
+        self.__altitude = float(datos[9])
         
         tmz = int(datos[8].split('.')[0])
-        self.timezone = pytz.timezone('Etc/GMT'+f'{(-tmz):+}')
+        self.__timezone = pytz.timezone('Etc/GMT'+f'{(-tmz):+}')
+        
+        self.__updated = True
 
     def meanDay(self,
+        day = None,
+        month = None,
+        year = None) -> pd.DataFrame:
+        """
+        Calculates the ambient temperature per second for the average day based on Location data.
+        """
+        
+        if day is not None:
+            if day != self.__day:
+                self.__day = day
+                self.__updated = True
+        if month is not None:
+            if month != self.__month:
+                self.__month = month
+                self.__updated = True
+        if year is not None:
+            if year != self.__year:
+                self.__year = year
+                self.__updated = True
+
+        if self.__meanday_dataframe is None or self.__updated:
+            self.__meanday_dataframe = self.__calc_meanday(day=self.__day, month=self.__month, year=self.__year)
+            self.__updated = False
+
+        return self.__meanday_dataframe
+
+    def __calc_meanday(self,
         day = "15",
         month = "current_month",
         year = "current_year"
@@ -79,6 +149,8 @@ class Location:
             DataFrame: Predicted ambient temperature ( Ta ), global ( Ig ), beam ( Ib ) 
             and diffuse irradiance ( Id ) per second for the average day of the specified month and year.
         """
+        
+        # print("Calculating mean day...")
         
         if month == "current_month": month = datetime.now().month
         if year == "current_year": year = datetime.now().year
@@ -118,7 +190,7 @@ class Location:
         """
         Returns a copy of the Location instance.
         """
-        return Location(self.epw)
+        return Location(self.file)
     
     def __epw_format_data(self, year = None, warns = False, alias = True):
         """
@@ -173,7 +245,7 @@ class Location:
                  'Wind Direction'              :'Wd',
                  'Wind Speed'                  :'Ws'}
 
-        data = pd.read_csv(self.epw, skiprows=8, header=None, names=names, usecols=range(35))
+        data = pd.read_csv(self.file, skiprows=8, header=None, names=names, usecols=range(35))
         data.Hour = data.Hour -1
         if year != None:
             data.Year = year
@@ -218,8 +290,6 @@ class System():
         add_layer(material, width): Adds a layer to the constructive system.
         remove_layer(index): Removes a layer from the constructive system by index.
         
-        set_solver(...): Class method to set solver parameters.
-        solver_info(): Class method to print current solver parameters.
     """
     
     def __init__(self, location:Location , tilt = 90, azimuth = 0, absortance = 0.8, layers = []):
@@ -340,9 +410,11 @@ class System():
         if surface_azimuth is not None:
             self.azimuth = surface_azimuth
         """
+
         if self.__tsa_dataframe is None or self.__updated or self.__tsa_solver_version != config.version:
-            self.__tsa_dataframe = self.__calc_tsa()  # el método que calcula Tsa
+            self.__tsa_dataframe = self.__calc_tsa(self.location.meanDay())  # el método que calcula Tsa
             self.__updated = False
+            
         return self.__tsa_dataframe
     
     def solve(self, energy=False) -> pd.DataFrame:
@@ -410,6 +482,8 @@ class System():
             print("Layers:")
             for i, (material, width) in enumerate(self.layers):
                 print(f"\t{i+1}: {material}, {width} m")
+        else:
+            print("Layers: No layers defined")
     
     def copy(self):
         """
@@ -423,8 +497,8 @@ class System():
             layers=self.layers.copy()
         )
     
-    def __calc_tsa(self) -> pd.DataFrame:
-        tsa_dataframe = self.location.meanDay()
+    def __calc_tsa(self, mean_day_dataframe) -> pd.DataFrame:
+        tsa_dataframe = mean_day_dataframe.copy()
         absortance = self.absortance
         tilt = self.tilt
         azimuth = self.azimuth
