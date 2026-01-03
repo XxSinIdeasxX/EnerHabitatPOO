@@ -103,7 +103,7 @@ class Location:
         tmz = int(datos[8].split('.')[0])
         self.__timezone = pytz.timezone('Etc/GMT'+f'{(-tmz):+}')
         
-        self.__updated = True
+        self.__invalidate_cache()
 
     def meanDay(self,
         day = None,
@@ -118,15 +118,15 @@ class Location:
         if day is not None:
             if day != self.__day:
                 self.__day = day
-                self.__updated = True
+                self.__invalidate_cache()
         if month is not None:
             if month != self.__month:
                 self.__month = month
-                self.__updated = True
+                self.__invalidate_cache()
         if year is not None:
             if year != self.__year:
                 self.__year = year
-                self.__updated = True
+                self.__invalidate_cache()
 
         recalculate = (self.__meanday_dataframe is None or 
                        self.__updated)
@@ -135,7 +135,12 @@ class Location:
             self.__updated = False
             
         if flag:
-            return self.__meanday_dataframe, recalculate
+            bandera = {'recalculate': recalculate,
+                       'date': str(self.__day) + '-' + str(self.__month) + '-' + str(self.__year),
+                       'day': str(self.__day),
+                       'month': str(self.__month),
+                       'year': str(self.__year)}
+            return self.__meanday_dataframe, bandera
         return self.__meanday_dataframe
 
     def __calc_meanday(self,
@@ -275,6 +280,9 @@ class Location:
             data.rename(columns=rename,inplace=True)
         
         return data
+
+    def __invalidate_cache(self):
+        self.__updated = True
     
 class System():
     """
@@ -305,9 +313,10 @@ class System():
         self.location = location
         self.layers= layers
         
-        self.__updated = True
+        self.__current_date = None
         self.__tsa_dataframe = None
         self.__solve_dataframe = None
+        self.__invalidate_cache()
     
     @property
     def layers(self):
@@ -417,17 +426,26 @@ class System():
         if surface_azimuth is not None:
             self.azimuth = surface_azimuth
         """
-        mean_dataframe, mean_flag =self.location.meanDay(flag=True)  # Asegura que el DataFrame del día medio esté actualizado
         
+        unused_mean_dataframe, mean_flag = self.location.meanDay(flag=True)  # Asegura que el DataFrame del día medio esté actualizado
+        
+        if  self.__current_date != mean_flag['date']:
+            self.__current_date = mean_flag['date']
+            self.__invalidate_cache()
+            
         recalculate = (self.__tsa_dataframe is None or
                        self.__updated or 
-                       self.__tsa_solver_version != config.version or 
-                       mean_flag)
+                       self.__tsa_solver_version != config.version
+                       )
+        
         if recalculate:
-            self.__tsa_dataframe = self.__calc_tsa(mean_dataframe)  # el método que calcula Tsa
+            self.__tsa_dataframe = self.__calc_tsa()  # el método que calcula Tsa
             self.__updated = False
+            
         if flag:
-            return self.__tsa_dataframe, recalculate
+            bandera = mean_flag
+            bandera['recalculate'] = recalculate
+            return self.__tsa_dataframe, bandera
         return self.__tsa_dataframe
     
     def solve(self, energy=False, flag=False) -> pd.DataFrame:
@@ -444,6 +462,11 @@ class System():
         if len(constructive_system) == 0:
             raise ValueError("Constructive system layers are not defined.")
         
+        unused_tsa_data, tsa_flag = self.Tsa(flag=True)
+        if self.__current_date != tsa_flag['date']:
+            self.__current_date = tsa_flag['date']
+            self.__invalidate_cache()
+        
         recalculate = (self.__updated or 
                         self.__solve_dataframe is None or 
                         self.__solve_solver_version != config.version or
@@ -453,11 +476,18 @@ class System():
         if recalculate:    
             self.__solve_dataframe, self.__solve_energy = self.__calc_solve(AC=False)
             self.__updated = False
+        
+        if flag:
+            bandera = {'recalculate': recalculate}
+            if energy:
+                return self.__solve_dataframe, self.__solve_energy, bandera
+            else:
+                return self.__solve_dataframe, bandera
             
         if energy:
-            return self.__solve_dataframe, self.__solve_energy, (recalculate if flag else None)
+            return self.__solve_dataframe, self.__solve_energy
         else:
-            return self.__solve_dataframe, (recalculate if flag else None)
+            return self.__solve_dataframe
     
     def solveAC(self, flag=False) -> pd.DataFrame:
         """
@@ -471,6 +501,11 @@ class System():
         constructive_system = self.layers
         if len(constructive_system) == 0:
             raise ValueError("Constructive system layers are not defined.")
+        
+        unused_tsa_data, tsa_flag = self.Tsa(flag=True)
+        if self.__current_date != tsa_flag['date']:
+            self.__current_date = tsa_flag['date']
+            self.__invalidate_cache()
         
         recalculate = (self.__updated or 
                         self.__solve_dataframe is None or 
@@ -514,8 +549,8 @@ class System():
             layers=self.layers.copy()
         )
     
-    def __calc_tsa(self, mean_day_dataframe) -> pd.DataFrame:
-        tsa_dataframe = mean_day_dataframe.copy()
+    def __calc_tsa(self) -> pd.DataFrame:
+        tsa_dataframe = self.location.meanDay().copy()
         absortance = self.absortance
         tilt = self.tilt
         azimuth = self.azimuth
