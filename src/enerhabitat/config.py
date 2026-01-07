@@ -57,23 +57,7 @@ class Config:
     """
     def __init__(self):
         self.reset()
-        self.__materials_file = "materials.ini"   # Default configuration file path      
-    
-    def materials_list(self):
-        """
-        Returns the list of materials contained in the configuration file
-
-        Returns:
-            list: List of materials in the configuration file
-        """
-        list_materials = list(self.materials.keys())
-        return list_materials
-    
-    def materials_dict(self):
-        new_dict = self.materials.copy()
-        for material_i in new_dict.keys():
-            new_dict[material_i] = self.materials[material_i].to_dict()
-        return new_dict
+        self.file = "materials.ini"   # Default configuration file path    
         
     def reset(self):
         self.__La = 2.5
@@ -108,6 +92,22 @@ class Config:
             "AIR_HEAT_CAPACITY": self.AIR_HEAT_CAPACITY,
         }
 
+    def materials_list(self):
+        """
+        Returns the list of materials contained in the configuration file
+
+        Returns:
+            list: List of materials in the configuration file
+        """
+        list_materials = list(self.materials.keys())
+        return list_materials
+    
+    def materials_dict(self):
+        new_dict = self.materials.copy()
+        for material_i in new_dict.keys():
+            new_dict[material_i] = self.materials[material_i].to_dict()
+        return new_dict
+    
     @property
     def file(self):
         try:    
@@ -139,14 +139,14 @@ class Config:
                 c = float(materials_data[material_i]['c'])
                 new_materials_dict[material_i] = Material(k, rho, c) 
             
-            self.__materials_dict = new_materials_dict
+            self.__materials_class = new_materials_dict
             
         except FileNotFoundError:
             print(f"Error: {new_file} not found")    
     
     @property
     def materials(self):
-        return self.__materials_dict
+        return self.__materials_class
     @materials.setter
     def materials(self, value):
         pass
