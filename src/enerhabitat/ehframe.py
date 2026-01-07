@@ -376,7 +376,7 @@ class System():
         self.__flag['recalculate'] = recalculate
         return self.__tsa_dataframe
     
-    def solve(self, energy=False) -> pd.DataFrame:
+    def solve(self) -> pd.DataFrame:
         """
         Solves the constructive system's inside temperature with the Tsa simulation dataframe.
 
