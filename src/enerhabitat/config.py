@@ -1,6 +1,39 @@
 import configparser
 import os
 
+class Material:
+    def __init__(self, k, rho, c):
+        self.__k = k
+        self.__rho = rho
+        self.__c = c
+    
+    def to_dict(self):
+        return {"k": self.k,
+                "rho": self.rho,
+                "c": self.c
+                }
+    
+    @property
+    def k(self):
+        return self.__k
+    @k.setter
+    def k(self, value):
+        pass
+    
+    @property
+    def rho(self):
+        return self.__rho
+    @rho.setter
+    def rho(self, value):
+        pass
+    
+    @property
+    def c(self):
+        return self.__c
+    @c.setter
+    def c(self, value):
+        pass
+
 class Config:
     """
     Global configuration class for EnerHabitat simulations.
@@ -24,8 +57,8 @@ class Config:
     """
     def __init__(self):
         self.reset()
-        self.__materials_file = "materials.ini"   # Default configuration file path
-
+        self.__materials_file = "materials.ini"   # Default configuration file path      
+    
     def materials_list(self):
         """
         Returns the list of materials contained in the configuration file
@@ -33,36 +66,15 @@ class Config:
         Returns:
             list: List of materials in the configuration file
         """
-        config = configparser.ConfigParser()
-        config.read(self.file)
-        materiales = config.sections()
-        return materiales
-
-    def materials_dict(self):
-        """
-        Returns a dictionary with the list of materials and their properties
-
-        Returns:
-            dict: _description_
-        """
-        data = configparser.ConfigParser()
-        data.read(self.file)
-
-        class Material:
-            def __init__(self, k, rho, c):
-                self.k = k
-                self.rho = rho
-                self.c = c
-
-        materiales = {}
-        for material_i in data.sections():
-            k = float(data[material_i]['k'])
-            rho = float(data[material_i]['rho'])
-            c = float(data[material_i]['c'])
-            materiales[material_i] = Material(k, rho, c)
-
-        return materiales
+        list_materials = list(self.materials.keys())
+        return list_materials
     
+    def materials_dict(self):
+        new_dict = self.materials.copy()
+        for material_i in new_dict.keys():
+            new_dict[material_i] = self.materials[material_i].to_dict()
+        return new_dict
+        
     def reset(self):
         self.__La = 2.5
         self.__Nx = 200
@@ -115,10 +127,30 @@ class Config:
 
             # Actualizar la configuración global si se proporcionó una nueva ruta
             self.__materials_file = new_file
+            
+            # Leer el .ini y obtener los nuevos materiales
+            new_materials_dict = {}
+            materials_data = configparser.ConfigParser() 
+            materials_data.read(self.file)
 
+            for material_i in materials_data.sections():
+                k = float(materials_data[material_i]['k'])
+                rho = float(materials_data[material_i]['rho'])
+                c = float(materials_data[material_i]['c'])
+                new_materials_dict[material_i] = Material(k, rho, c) 
+            
+            self.__materials_dict = new_materials_dict
+            
         except FileNotFoundError:
             print(f"Error: {new_file} not found")    
-        
+    
+    @property
+    def materials(self):
+        return self.__materials_dict
+    @materials.setter
+    def materials(self, value):
+        pass
+    
     @property
     def La(self):
         return self.__La

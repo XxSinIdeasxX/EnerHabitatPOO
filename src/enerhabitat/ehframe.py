@@ -319,9 +319,17 @@ class System():
                        "solve_date": None,
                        "config": config.to_dict()
                        }
-        self.__update_flag()
+        # self.__update_flag_config()
         self.__tsa_dataframe = None
         self.__solve_dataframe = None
+        
+        self.__tsa_solver_version = -1
+        self.__solve_solver_version = -1
+        self.__last_solve = None
+        
+        self.__energy_transfer = None
+        self.__cooling_energy = None
+        self.__heating_energy = None
         self.__invalidate_cache()
         
     def Tsa(self,
@@ -354,7 +362,7 @@ class System():
             self.__flag["tsa_date"] = mean_date
             self.__invalidate_cache()
         
-        self.__update_flag()
+        self.__update_flag_config()
         
         recalculate = (self.__tsa_dataframe is None or
                        self.__updated or 
@@ -386,7 +394,7 @@ class System():
             self.__flag["solve_date"] = self.__flag['tsa_date']
             self.__invalidate_cache()
         
-        self.__update_flag()
+        self.__update_flag_config()
         
         recalculate = (self.__updated or 
                         self.__solve_dataframe is None or 
@@ -397,13 +405,10 @@ class System():
         self.__flag['recalculate'] = recalculate
         
         if recalculate:    
-            self.__solve_dataframe, self.__solve_energy = self.__calc_solve(AC=False)
+            self.__solve_dataframe = self.__calc_solve(AC=False)
             self.__updated = False
             
-        if energy:
-            return self.__solve_dataframe, self.__solve_energy
-        else:
-            return self.__solve_dataframe
+        return self.__solve_dataframe
     
     def solveAC(self) -> pd.DataFrame:
         """
@@ -422,7 +427,7 @@ class System():
             self.__flag["solve_date"] = self.__flag['tsa_date']
             self.__invalidate_cache()
         
-        self.__update_flag()
+        self.__update_flag_config()
         
         recalculate = (self.__updated or 
                         self.__solve_dataframe is None or 
@@ -433,10 +438,10 @@ class System():
         self.__flag['recalculate'] = recalculate
         
         if recalculate:
-            self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat = self.__calc_solve(AC=True)
+            self.__solve_dataframe = self.__calc_solve(AC=True)
             self.__updated = False
         
-        return self.__solve_dataframe, self.__solve_qcool, self.__solve_qheat
+        return self.__solve_dataframe
 
     def info(self):
         """
@@ -495,7 +500,7 @@ class System():
         self.__invalidate_cache()
         return self.layers
     
-    def __update_flag(self):
+    def __update_flag_config(self):
         """
         Checks for changes and updates the flag["config"] in the System instance.
         """
@@ -567,7 +572,7 @@ class System():
         SC_dataframe = self.Tsa().copy()
         constructive_system = self.layers
         
-        propiedades = config.materials_dict()
+        propiedades = config.materials
 
         cs = set_construction(propiedades, constructive_system)
         k, rhoc, dx = set_k_rhoc(cs, Nx)
@@ -610,8 +615,13 @@ class System():
                 C = abs(Told - Tnew).mean()
 
             SC_dataframe['Ti'] = Ti_vals
+            
             self.__last_solve = 'ac'
-            return SC_dataframe['Ti'], Qcool, Qheat
+            self.__energy_transfer = None
+            self.__cooling_energy = Qcool
+            self.__heating_energy = Qheat
+            
+            return SC_dataframe['Ti']
 
         else:
             while C > 5e-4: 
@@ -629,8 +639,13 @@ class System():
                 ET = ET_iter
 
             SC_dataframe['Ti'] = Ti_vals
+            
             self.__last_solve = 'temp'
-            return SC_dataframe['Ti'], ET
+            self.__energy_transfer = ET
+            self.__cooling_energy = None
+            self.__heating_energy = None
+                        
+            return SC_dataframe['Ti']
 
     def __invalidate_cache(self):
         self.__updated = True
@@ -694,4 +709,24 @@ class System():
             self.__absortance = value
             self.__invalidate_cache()
 
+    # Solo lectura
+    @property
+    def energy_transfer(self):
+        return self.__energy_transfer
+    @energy_transfer.setter
+    def energy_transfer(self, value):
+        pass
     
+    @property
+    def heating_energy(self):
+        return self.__heating_energy
+    @heating_energy.setter
+    def heating_energy(self, value):
+        pass
+    
+    @property
+    def cooling_energy(self):
+        return self.__cooling_energy
+    @cooling_energy.setter
+    def cooling_energy(self, value):
+        pass

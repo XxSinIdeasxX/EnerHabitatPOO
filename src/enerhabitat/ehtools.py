@@ -347,6 +347,5 @@ def solve_PQ_AC(a, b, c, d, T, nx, Tint, hi, La, dt):
         Tn[i] = P[i] * Tn[i + 1] + Q[i]
 
     T[:] = Tn
-
-
+    
     return T, Tint
