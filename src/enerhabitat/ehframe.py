@@ -453,6 +453,9 @@ class System():
         print(f"Tilt: {self.tilt}°")
         print(f"Azimuth: {self.azimuth}°")
         print(f"Absortance: {self.absortance}")
+        print(f"Energy transfer: {self.energy_transfer}")
+        print(f"Cooling energy: {self.cooling_energy}")
+        print(f"Heating energy: {self.heating_energy}")
         if len(self.layers) != 0:
             print("Layers:")
             for i, (material, width) in enumerate(self.layers):
